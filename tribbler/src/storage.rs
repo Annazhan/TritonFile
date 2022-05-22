@@ -2,9 +2,11 @@
 //! module containing Tribbler storage-related structs and implementations
 use async_trait::async_trait;
 use bson::Bson;
+use fuser::Session;
 use log::error;
 use log::info;
-use std::{collections::HashMap, ffi::OsStr, fs, io::ErrorKind, sync::RwLock, simd::SimdElement};
+use std::io;
+use std::{collections::HashMap, ffi::OsStr, fs, io::ErrorKind, sync::RwLock};
 use tokio::io::BufStream;
 use tokio_stream::{Stream, StreamExt};
 
@@ -137,7 +139,7 @@ pub trait ServerFileSystem {
 /// The trait bounds for [KeyString] and [KeyList] respectively represent
 /// the functions requires for the single key-value and key-list parts of the
 /// storage interface.
-pub trait Storage: KeyString + KeyList + Send + Sync {
+pub trait Storage: ServerFileSystem + KeyString + KeyList + Send + Sync {
     /// Returns an auto-incrementing clock. The returned value of each call will
     /// be unique, no smaller than `at_least`, and strictly larger than the
     /// value returned last time, unless it was [u64::MAX]
@@ -156,7 +158,7 @@ pub struct RemoteFileSystem {
     fs: BackgroundSession,
 }
 
-fn start_filesystem(options: Vec<MountOption>, num : u32) -> BackgroundSession{
+fn start_filesystem(options: Vec<MountOption>, num : u32) -> io::Result<BackgroundSession, >{
     if !fs::metadata(format!("~/Desktop/tmp/{}", num)).is_ok() {
         fs::create_dir(format!("~/Desktop/tmp/{}", num));
     }
@@ -166,18 +168,20 @@ fn start_filesystem(options: Vec<MountOption>, num : u32) -> BackgroundSession{
         format!("~/Desktop/tmp/{}", num),
         &options,
     );
+    result
 
-    if let Err(e) = result{
-        // Return a special error code for permission denied, which usually indicates that
-        // "user_allow_other" is missing from /etc/fuse.conf
-        if e.kind() == ErrorKind::PermissionDenied {
-            error!("{}", e.to_string());
-            std::process::exit(2);
-        }
-    };
+    // if let Err(e) = result{
+    //     // Return a special error code for permission denied, which usually indicates that
+    //     // "user_allow_other" is missing from /etc/fuse.conf
+    //     if e.kind() == ErrorKind::PermissionDenied {
+    //         error!("{}", e.to_string());
+    //         std::process::exit(2);
+    //     }
+    // };
 
-    result.unwrap()
+    // result.unwrap()
 }
+
 
 
 impl RemoteFileSystem {
@@ -294,6 +298,61 @@ impl KeyList for RemoteFileSystem {
             .for_each(|(v, _)| result.push((*v).clone()));
         result.sort();
         Ok(List(result))
+    }
+}
+
+#[async_trait]
+impl ServerFileSystem for RemoteFileSystem {
+    async fn read(
+        &self,
+        _req: &Request,
+        inode: u64,
+        fh: u64,
+        offset: i64,
+        size: u32,
+        _flags: i32,
+        _lock_owner: Option<u64>,
+    ) -> TritonFileResult<Bson>{
+        todo!()
+    }
+
+    async fn write(
+        &mut self,
+        _req: &Request,
+        inode: u64,
+        fh: u64,
+        offset: i64,
+        data: &[u8],
+        _write_flags: u32,
+        #[allow(unused_variables)] flags: i32,
+        _lock_owner: Option<u64>,
+    ) -> TritonFileResult<u32>{
+        todo!()
+    }
+
+    async fn lookup(
+        &mut self,
+        req: &Request,
+        parent: u64,
+        name: &OsStr,
+    ) -> TritonFileResult<FileAttr>{
+        todo!()
+    }
+
+    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<()>{
+        todo!()
+    }
+
+    async fn create(
+        &mut self,
+        req: &Request,
+        parent: u64,
+        name: &OsStr,
+        mut mode: u32,
+        _umask: u32,
+        flags: i32,
+    ) -> TritonFileResult<(FileAttr, u64)>{
+        todo!()
     }
 }
 
