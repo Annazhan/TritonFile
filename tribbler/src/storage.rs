@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 //! module containing Tribbler storage-related structs and implementations
 use async_trait::async_trait;
-use std::{collections::HashMap, ffi::OsStr, sync::RwLock};
+use std::{collections::HashMap, ffi::OsStr, fs, sync::RwLock};
 use tokio::io::BufStream;
 use tokio_stream::{Stream, StreamExt};
 
@@ -142,7 +142,7 @@ pub trait ServerFileSystem {
 /// The trait bounds for [KeyString] and [KeyList] respectively represent
 /// the functions requires for the single key-value and key-list parts of the
 /// storage interface.
-pub trait Storage: ServerFileSystem + KeyString + KeyList + Send + Sync {
+pub trait Storage: KeyString + KeyList + Send + Sync {
     /// Returns an auto-incrementing clock. The returned value of each call will
     /// be unique, no smaller than `at_least`, and strictly larger than the
     /// value returned last time, unless it was [u64::MAX]
@@ -171,10 +171,25 @@ impl RemoteFileSystem {
         #[cfg(not(feature = "abi-7-26"))]
         {
             options.push(MountOption::AutoUnmount);
+            options.push(MountOption::AllowOther);
         }
-        if let Ok(enabled) = fuse_allow_other_enabled() {
-            if enabled {
-                options.push(MountOption::AllowOther);
+
+        if !fs::metadata(format!("~/Desktop/tmp/{}", num)).is_ok() {
+            fs::create_dir(format!("~/Desktop/tmp/{}", num));
+        }
+
+        let result = fuser::spawn_mount2(
+            SimpleFS::new("/tmp/fuser".to_string(), false, true),
+            format!("~/Desktop/tmp/{}", num),
+            &options,
+        );
+
+        if let Err(e) = result {
+            // Return a special error code for permission denied, which usually indicates that
+            // "user_allow_other" is missing from /etc/fuse.conf
+            if e.kind() == ErrorKind::PermissionDenied {
+                error!("{}", e.to_string());
+                std::process::exit(2);
             }
         }
 

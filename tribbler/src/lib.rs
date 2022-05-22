@@ -15,10 +15,8 @@
 pub mod addr;
 pub mod colon;
 pub mod config;
-pub mod err;
 pub mod error;
-pub mod ref_impl;
 /// protobuf-generated RPC stubs and message structs
 pub mod rpc;
+pub mod simple;
 pub mod storage;
-pub mod trib;
