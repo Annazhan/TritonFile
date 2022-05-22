@@ -1,18 +1,18 @@
 //! this module provides functions for getting interacting with the local
 //! system's set of network interfaces.
-use crate::err::TribResult;
+use crate::error::TritonFileResult;
 use std::net::{IpAddr, ToSocketAddrs};
 
 /// returns a list of the IP addresses on the current system's network
 /// interfaces
-pub fn get_local_addrs() -> TribResult<Vec<IpAddr>> {
+pub fn get_local_addrs() -> TritonFileResult<Vec<IpAddr>> {
     let r = local_ip_address::list_afinet_netifas()?;
     Ok(r.iter().map(|x| x.1).collect())
 }
 
 /// checks if the address provided in `addr` resolves to an IP address which is
 /// currently served by one of the operating system's network interfaces.
-pub fn check(addr: &str) -> TribResult<bool> {
+pub fn check(addr: &str) -> TritonFileResult<bool> {
     let addrs = addr.to_socket_addrs()?;
     let local_addrs = get_local_addrs()?;
     Ok(local_addrs

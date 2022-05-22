@@ -10,7 +10,7 @@ use std::time::SystemTime;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Receiver;
 
-use crate::err::TribResult;
+use crate::error::TritonFileResult;
 use crate::storage::Storage;
 
 pub const DEFAULT_CONFIG_LOCATION: &str = "bins.json";
@@ -86,7 +86,7 @@ impl Config {
 
     /// Reads from an optional path a tribbler configuration into a [Config]
     /// struct. If [None] is provided, [DEFAULT_CONFIG_LOCATION] is used.
-    pub fn read(location: Option<&str>) -> TribResult<Config> {
+    pub fn read(location: Option<&str>) -> TritonFileResult<Config> {
         let file = Config::location(location);
         let pth = fs::canonicalize(file)?;
         Ok(serde_json::from_slice::<Config>(&fs::read(pth)?)?)
@@ -96,7 +96,7 @@ impl Config {
     /// specified, the location is [DEFAULT_CONFIG_LOCATION].
     ///
     /// If the specified location is `-`, then it will write to stdout
-    pub fn write(&self, location: Option<&str>) -> TribResult<()> {
+    pub fn write(&self, location: Option<&str>) -> TritonFileResult<()> {
         let file = Config::location(location);
         let mut handle: Box<dyn Write> = match file {
             "-" => Box::new(stdout()),
@@ -158,7 +158,7 @@ impl Config {
         i: usize,
         ready: Option<Sender<bool>>,
         shutdown: Option<Receiver<()>>,
-    ) -> TribResult<KeeperConfig> {
+    ) -> TritonFileResult<KeeperConfig> {
         Ok(KeeperConfig {
             backs: self.backs.clone(),
             addrs: self.keepers.clone(),
