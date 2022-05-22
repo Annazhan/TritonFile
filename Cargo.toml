@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-# export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
+
 [dependencies]
-fuser = "0.11.0"
+fuser = {path = "./fuser"}
 tonic = "0.6"
 libc = "0.2.51"
 log = "0.4.6"
@@ -27,5 +27,4 @@ serde = {version = "1.0.102", features=["std", "derive"]}
 tempfile = "3"
 
 [build-dependencies]
-tonic-build = {  version = "0.6"}
 pkg-config = {version = "0.3.14", optional = true }
