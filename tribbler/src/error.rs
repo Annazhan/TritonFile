@@ -7,11 +7,13 @@ pub enum TritonFileError {
     InvalidFilename(String),
     RpcError(String),
     FilesTooMany,
+    /// when there are no more seq numbers to give out
+    MaxedSeq,
     /// catch-all error for other issues
     Unknown(String),
 }
 
-impl Display for TritonFileError{
+impl Display for TritonFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let x = match self {
             TritonFileError::FileDoesNotExist(x) => format!("file \"{}\" does not exist", x),
@@ -19,6 +21,8 @@ impl Display for TritonFileError{
             TritonFileError::PathTaken(x) => format!("path \"{}\" is invalid", x),
             TritonFileError::RpcError(x) => format!("rpc error: {}", x),
             TritonFileError::FilesTooMany => "too many files".to_string(),
+            TritonFileError::Unknown(x) => format!("unknown error: {}", x),
+            x => format!("{:?}", x),
         };
         write!(f, "{}", x)
     }
