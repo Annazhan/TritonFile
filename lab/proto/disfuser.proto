@@ -65,7 +65,7 @@ message FRequest {
 // }
 
 message Reply {
-    string message = 1; // [u8]
+    string message = 1; // string
     uint64 errcode = 2; // for the Err when unwrap
 }
 
@@ -79,7 +79,7 @@ message Read {
     uint64 lock_owner = 7;
 }
 
-message ReplyWrite {
+message writeReply {
     uint32 size = 1;
     uint64 errcode = 2;
 }
@@ -141,8 +141,8 @@ message Create {
     int32 flags = 6;
 }
 
-message Bool {
-    bool bool = 1;
+message unlinkReply {
+    uint64 errcode = 1;
 }
 
 message Unlink {
@@ -155,14 +155,14 @@ message Unlink {
 message createReply {
     string fileAttr = 1;
     uint64 fh = 2;
-    uint64 code = 3;
+    uint64 errcode = 3;
 }
 
 
 service disfuser {
     rpc read(Read) returns (stream Reply) {}
-    rpc write(stream Write) returns (ReplyWrite) {}
-    rpc lookup(LookUp) returns (stream Reply) {} // reply value?
-    rpc create(Create) returns (createReply) {} // reply value?
-    rpc unlink(Unlink) returns (Bool) {} // reply value?
+    rpc write(stream Write) returns (writeReply) {}
+    rpc lookup(LookUp) returns (Reply) {} 
+    rpc create(Create) returns (createReply) {} 
+    rpc unlink(Unlink) returns (unlinkReply) {} 
 }
