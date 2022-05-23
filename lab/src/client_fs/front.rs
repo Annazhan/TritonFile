@@ -140,14 +140,14 @@ impl Filesystem for Front {
 
         match bin_res {
             Ok(bin) => {
-                let bin_lookup_pre = bin.lookup(req.uid(), parent, name);
+                let bin_lookup_pre = bin.lookup(req, parent, name);
 
                 let res = self.runtime.block_on(bin_lookup_pre);
 
                 //InodeAttributes
                 match res {
-                    Ok(attrs) => reply.entry(attrs),
-                    Err(error_code) => reply.error(error_code),
+                    Ok(attrs) => reply.entry(&Duration::new(0, 0), &attrs.into(), 0),
+                    Err(e) => reply.error(e),
                 }
             }
             Err(_) => (),
@@ -166,18 +166,21 @@ impl Filesystem for Front {
         reply: ReplyData,
     ) {
         // ReliableStore
-        let bin_pre = self.binstore.bin(req.uid().to_string().as_str());
+        let bin_pre = self.binstore.bin(_req.uid().to_string().as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
             Ok(bin) => {
-                let bin_read_pre =
-                    bin.read(_req.uid(), inode, fh, offset, size, _flags, _lock_owner);
+                let bin_read_pre = bin.read(_req, inode, fh, offset, size, _flags, _lock_owner);
 
                 let res = self.runtime.block_on(bin_read_pre);
 
                 match res {
-                    Ok(data) => reply.data(data),
+                    Ok(string_data) => {
+                        let string_data: &str = &data;
+                        let data: Vec<u8> = str_data.as_bytes().to_vec();
+                        reply.data(&data)
+                    }
                     Err(_) => reply.error(libc::ENOENT),
                 }
             }
@@ -204,7 +207,7 @@ impl Filesystem for Front {
         match bin_res {
             Ok(bin) => {
                 let bin_write_pre = bin.write(
-                    _req.uid(),
+                    _req,
                     inode,
                     fh,
                     offset,
@@ -241,21 +244,14 @@ impl Filesystem for Front {
 
         match bin_res {
             Ok(bin) => {
-                let bin_create_pre = bin.create(_req.uid(), parent, name, mode, _umask, flags);
+                let bin_create_pre = bin.create(req, parent, name, mode, _umask, flags);
 
                 let res = self.runtime.block_on(bin_create_pre);
 
                 match res {
-                    Ok(res_info) => 
-                    {
-                        let attrs, fh = res_info; 
-                        reply.created(
-                            &Duration::new(0, 0),
-                            &attrs.into(),
-                            0,
-                            fh,
-                            0,
-                        )
+                    Ok(res_info) => {
+                        let (attrs, fh) = res_info;
+                        reply.created(&Duration::new(0, 0), &attrs.into(), 0, fh, 0)
                     }
                     Err(error_code) => reply.error(error_code),
                 }
@@ -271,17 +267,15 @@ impl Filesystem for Front {
 
         match bin_res {
             Ok(bin) => {
-                let bin_unlink_pre = bin.write(
-                    _req.uid(),
-                    parent,
-                    name
-                );
+                let bin_unlink_pre = bin.unlink(_req, parent, name);
 
                 let res = self.runtime.block_on(bin_unlink_pre);
 
                 match res {
-                    Ok(written) => reply.written(written),
-                    Err(error_code) => reply.error(error_code),
+                    Ok(_) => {
+                        reply.ok();
+                    }
+                    Err(e) => reply.error(e),
                 }
             }
             Err(_) => (),

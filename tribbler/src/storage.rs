@@ -13,7 +13,7 @@ use tokio_stream::{Stream, StreamExt};
 use crate::error::TritonFileResult;
 use crate::simple::SimpleFS;
 
-use fuser::{FileAttr, MountOption, Request, BackgroundSession};
+use fuser::{BackgroundSession, FileAttr, MountOption, Request};
 
 #[derive(Debug, Clone)]
 
@@ -100,7 +100,7 @@ pub trait ServerFileSystem {
         size: u32,
         _flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<Bson>;
+    ) -> TritonFileResult<String>;
 
     async fn write(
         &mut self,
@@ -158,7 +158,7 @@ pub struct RemoteFileSystem {
     fs: BackgroundSession,
 }
 
-fn start_filesystem(options: Vec<MountOption>, num : u32) -> io::Result<BackgroundSession, >{
+fn start_filesystem(options: Vec<MountOption>, num: u32) -> io::Result<BackgroundSession> {
     if !fs::metadata(format!("~/Desktop/tmp/{}", num)).is_ok() {
         fs::create_dir(format!("~/Desktop/tmp/{}", num));
     }
@@ -182,11 +182,9 @@ fn start_filesystem(options: Vec<MountOption>, num : u32) -> io::Result<Backgrou
     // result.unwrap()
 }
 
-
-
 impl RemoteFileSystem {
     /// Creates a new instance of [MemStorage]
-    pub fn new(num: u32) -> RemoteFileSystem  {
+    pub fn new(num: u32) -> RemoteFileSystem {
         let mut options = vec![MountOption::FSName(format!("fuser{}", num))];
         #[cfg(feature = "abi-7-26")]
         {
@@ -198,11 +196,10 @@ impl RemoteFileSystem {
             options.push(MountOption::AllowOther);
         }
 
-        
-        RemoteFileSystem { 
-            kvs: RwLock::new(HashMap::new()), 
-            kv_list: RwLock::new(HashMap::new()), 
-            clock: RwLock::new(0), 
+        RemoteFileSystem {
+            kvs: RwLock::new(HashMap::new()),
+            kv_list: RwLock::new(HashMap::new()),
+            clock: RwLock::new(0),
             fs: start_filesystem(options, num),
         }
     }
@@ -312,7 +309,7 @@ impl ServerFileSystem for RemoteFileSystem {
         size: u32,
         _flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<Bson>{
+    ) -> TritonFileResult<String> {
         todo!()
     }
 
@@ -326,7 +323,7 @@ impl ServerFileSystem for RemoteFileSystem {
         _write_flags: u32,
         #[allow(unused_variables)] flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<u32>{
+    ) -> TritonFileResult<u32> {
         todo!()
     }
 
@@ -335,11 +332,11 @@ impl ServerFileSystem for RemoteFileSystem {
         req: &Request,
         parent: u64,
         name: &OsStr,
-    ) -> TritonFileResult<FileAttr>{
+    ) -> TritonFileResult<FileAttr> {
         todo!()
     }
 
-    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<()>{
+    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<()> {
         todo!()
     }
 
@@ -351,7 +348,7 @@ impl ServerFileSystem for RemoteFileSystem {
         mut mode: u32,
         _umask: u32,
         flags: i32,
-    ) -> TritonFileResult<(FileAttr, u64)>{
+    ) -> TritonFileResult<(FileAttr, u64)> {
         todo!()
     }
 }

@@ -7,6 +7,8 @@ use tribbler::rpc;
 use tribbler::rpc::trib_storage_client::TribStorageClient;
 use tribbler::storage;
 use tribbler::storage::{KeyList, KeyString, Storage};
+use tribbler::disfuser;
+pub const NON_ERROR:u64 = -1; 
 
 pub struct StorageClient {
     channel: Mutex<Channel>,
@@ -39,8 +41,41 @@ impl ServerFileSystem for StorageClient{
         size: u32,
         _flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<FileStream>{
+    ) -> TritonFileResult<String>{
+        // client return string 
+        // binstore return string  
+        // front: string -> vec[u8]
+        let mut client = self.client().await;
+        let FReq = disfuser::FRequest{
+            uid: _req.uid(),
+            gid: _req.gid(),
+            pid: _req.pid(),
+        };
 
+        let stream = client
+            .read(disfuser::Read{
+                FReq, 
+                inode,
+                fh,
+                offset,
+                size,
+                _flags,
+                _lock_owner
+            }).await
+            .unwrap()
+            .into_inner();
+        let mut received : Vec<String> = Vec::new();
+        let mut error_code: u64; 
+        let mut stream = stream.take();
+        while let Some(item) = stream.next().await {
+            received.push(item.unwrap().message);
+            error_code = item.unwrap().success; 
+            if error_code!= NON_ERROR{
+                Err(error_code)
+            }
+        }
+        let joined_received = received.join("");
+        Ok(joined_received)
     }
 
     async fn write(
@@ -54,22 +89,25 @@ impl ServerFileSystem for StorageClient{
         #[allow(unused_variables)] flags: i32,
         _lock_owner: Option<u64>,
     ) -> TritonFileResult<u32>{
+        //stream writing
+        todo!();
         let mut client = self.client().await;
         let result = client
-            .write(rpc::Key {
-                key: key.to_string(),
+            .write(disfuser::Write{
+                _req, 
+                inode,
+                fh,
+                offset,
+                data,
+                _write_flags,
+                flags,
+                _lock_owner
             })
-            .await;
-        match result {
-            Ok(val) => Ok(Some(val.into_inner().value)),
-            Err(err) => {
-                if err.code() == Code::NotFound {
-                    Ok(None)
-                } else {
-                    Err(err.into())
-                }
-            }
+            .await?;
+        if result.into_inner().errcode!=NON_ERROR{
+            Err(result.into_inner().errcode)
         }
+        Ok(result.into_inner().size)
     }
 
     async fn lookup(
@@ -78,11 +116,33 @@ impl ServerFileSystem for StorageClient{
         parent: u64,
         name: &OsStr,
     ) -> TritonFileResult<FileAttr>{
-
-    }
-
-    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<()>{
-
+        let mut client = self.client().await;
+        let stream = client
+            .lookup(disfuser::LookUp {
+                req, 
+                parent,
+                name
+            })
+            .await
+            .unwrap()
+            .into_inner();
+        
+        let mut received : Vec<String> = Vec::new();
+        let mut error_code: u64; 
+        let mut stream = stream.take();
+        while let Some(item) = stream.next().await {
+            received.push(item.unwrap().message);
+            error_code = item.unwrap().success; 
+            if error_code!= NON_ERROR{
+                Err(error_code)
+            }
+        }
+        let joined_received = received.join("");
+        let fileattr = serde_json::from_str::<FileAttr>(joined_received).unwrap();
+        Ok(fileattr)
+        // receive stream Reply
+        // Return FileAttr
+        // binstore return FileAttr  
     }
 
     async fn create(
@@ -94,7 +154,42 @@ impl ServerFileSystem for StorageClient{
         _umask: u32,
         flags: i32,
     ) -> TritonFileResult<(FileAttr, u64)>{
+        let mut client = self.client().await;
+        let result = client
+            .create(disfuser::Create {
+                req,
+                parent,
+                name,
+                mode,
+                _umask, 
+                flags
+            })
+            .await?;
+        
+        let attr = result.into_inner().attr;
+        let fh = result.into_inner().fh;
+        let error_code = result.into_inner().errcode;
+        if error_code != NON_ERROR{
+            Err(error_code);
+        }
+        let fileattr = serde_json::from_str::<FileAttr>(joined_received).unwrap();
+        Ok((fileattr, fh))
+        // receive string -> tuple
+        // tuple -> fileattr, u64
+        // let attr, fh = result.into_inner().attr, result.into_inner().fh; 
+        // Ok((attr, fh))
+    }
 
+    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<()>{
+        let mut client = self.client().await;
+        let result = client
+            .unlink(disfuser::Unlink {
+                req,
+                parent, 
+                name
+            })
+            .await?;
+        Ok(())
     }
 }
 

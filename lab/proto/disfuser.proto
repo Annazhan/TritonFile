@@ -152,9 +152,10 @@ message Unlink {
     string name = 3;
 }
 
-message createRply {
+message createReply {
     string fileAttr = 1;
-    uint64 code = 2;
+    uint64 fh = 2;
+    uint64 code = 3;
 }
 
 
@@ -162,6 +163,6 @@ service disfuser {
     rpc read(Read) returns (stream Reply) {}
     rpc write(stream Write) returns (ReplyWrite) {}
     rpc lookup(LookUp) returns (stream Reply) {} // reply value?
-    rpc create(Create) returns (createRply) {} // reply value?
+    rpc create(Create) returns (createReply) {} // reply value?
     rpc unlink(Unlink) returns (Bool) {} // reply value?
 }
