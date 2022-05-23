@@ -1,4 +1,5 @@
 use std::{error::Error, fmt::Display};
+use libc::{c_int};
 
 #[derive(Debug, Clone)]
 pub enum TritonFileError {
@@ -11,7 +12,9 @@ pub enum TritonFileError {
     MaxedSeq,
     /// catch-all error for other issues
     Unknown(String),
+    UserInterfaceError(c_int),
 }
+
 
 impl Display for TritonFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -48,5 +51,14 @@ pub type TritonFileResult<T> = Result<T, Box<(dyn Error + Send + Sync)>>;
 impl From<Box<dyn Error>> for TritonFileError {
     fn from(x: Box<dyn Error>) -> Self {
         TritonFileError::Unknown(x.to_string())
+    }
+}
+
+impl From<TritonFileError> for i32 {
+    fn from(error: TritonFileError) -> Self {
+        match error{
+            TritonFileError::UserInterfaceError(x) => x,
+            _ => -1,
+        }
     }
 }

@@ -2,16 +2,34 @@
 //! module containing Tribbler storage-related structs and implementations
 use async_trait::async_trait;
 use bson::Bson;
+use fuser::Reply;
+use fuser::ReplyData;
 use fuser::Session;
 use log::error;
 use log::info;
+use std::cmp::min;
+use std::collections::BTreeMap;
+use std::fs::File;
+use std::fs::OpenOptions;
 use std::io;
+use std::io::Seek;
+use std::io::SeekFrom;
+use std::io::Write;
+use std::os::unix::prelude::FileExt;
+use std::os::unix::prelude::OsStrExt;
 use std::{collections::HashMap, ffi::OsStr, fs, io::ErrorKind, sync::RwLock};
 use tokio::io::BufStream;
 use tokio_stream::{Stream, StreamExt};
 
+use crate::error::TritonFileError;
 use crate::error::TritonFileResult;
+use crate::simple;
+use crate::simple::FileKind;
+use crate::simple::InodeAttributes;
 use crate::simple::SimpleFS;
+use crate::simple::check_access;
+use crate::simple::clear_suid_sgid;
+use crate::simple::time_now;
 
 use fuser::{BackgroundSession, FileAttr, MountOption, Request};
 
@@ -155,32 +173,10 @@ pub struct RemoteFileSystem {
     kvs: RwLock<HashMap<String, String>>,
     kv_list: RwLock<HashMap<String, List>>,
     clock: RwLock<u64>,
-    fs: BackgroundSession,
+    session: BackgroundSession,
+    fs: SimpleFS,
 }
 
-fn start_filesystem(options: Vec<MountOption>, num: u32) -> io::Result<BackgroundSession> {
-    if !fs::metadata(format!("~/Desktop/tmp/{}", num)).is_ok() {
-        fs::create_dir(format!("~/Desktop/tmp/{}", num));
-    }
-
-    let result = fuser::spawn_mount2(
-        SimpleFS::new("/tmp/fuser".to_string(), false, true),
-        format!("~/Desktop/tmp/{}", num),
-        &options,
-    );
-    result
-
-    // if let Err(e) = result{
-    //     // Return a special error code for permission denied, which usually indicates that
-    //     // "user_allow_other" is missing from /etc/fuse.conf
-    //     if e.kind() == ErrorKind::PermissionDenied {
-    //         error!("{}", e.to_string());
-    //         std::process::exit(2);
-    //     }
-    // };
-
-    // result.unwrap()
-}
 
 impl RemoteFileSystem {
     /// Creates a new instance of [MemStorage]
@@ -196,11 +192,23 @@ impl RemoteFileSystem {
             options.push(MountOption::AllowOther);
         }
 
-        RemoteFileSystem {
-            kvs: RwLock::new(HashMap::new()),
-            kv_list: RwLock::new(HashMap::new()),
-            clock: RwLock::new(0),
-            fs: start_filesystem(options, num),
+        if !fs::metadata(format!("~/Desktop/tmp/{}", num)).is_ok() {
+            fs::create_dir(format!("~/Desktop/tmp/{}", num));
+        }
+
+        let fs = SimpleFS::new("/tmp/fuser".to_string(), false, true);
+        let result = fuser::spawn_mount2(
+            fs,
+            format!("~/Desktop/tmp/{}", num),
+            &options,
+        );
+
+        RemoteFileSystem { 
+            kvs: RwLock::new(HashMap::new()), 
+            kv_list: RwLock::new(HashMap::new()), 
+            clock: RwLock::new(0), 
+            session: result.unwrap(),
+            fs: SimpleFS::new("/tmp/fuser".to_string(), false, true),
         }
     }
 }
@@ -309,8 +317,29 @@ impl ServerFileSystem for RemoteFileSystem {
         size: u32,
         _flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<String> {
-        todo!()
+    ) -> TritonFileResult<String>{
+        let fs = &self.fs;
+        info!(
+            "read() called on {:?} offset={:?} size={:?}",
+            inode, offset, size
+        );
+        assert!(offset >= 0);
+        if !fs.check_file_handle_read(fh) {
+            return Err(Box::new(TritonFileError::UserInterfaceError(libc::EACCES)));
+        }
+
+        let path = fs.content_path(inode);
+        if let Ok(file) = File::open(&path) {
+            let file_size = file.metadata().unwrap().len();
+            // Could underflow if file length is less than local_start
+            let read_size = min(size, file_size.saturating_sub(offset as u64) as u32);
+
+            let mut buffer = vec![0; read_size as usize];
+            file.read_exact_at(&mut buffer, offset as u64).unwrap();
+            return Ok(serde_json::to_string(&buffer).unwrap());
+        } else {
+            return Err(Box::new(TritonFileError::UserInterfaceError(libc::ENOENT)));
+        }
     }
 
     async fn write(
@@ -323,8 +352,39 @@ impl ServerFileSystem for RemoteFileSystem {
         _write_flags: u32,
         #[allow(unused_variables)] flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<u32> {
-        todo!()
+    ) -> TritonFileResult<u32>{
+        let fs = &self.fs;
+
+        info!("write() called with {:?} size={:?}", inode, data.len());
+        assert!(offset >= 0);
+        if !fs.check_file_handle_write(fh) {
+            return Err(Box::new(TritonFileError::UserInterfaceError(libc::EACCES)));
+        }
+
+        let path = fs.content_path(inode);
+        if let Ok(mut file) = OpenOptions::new().write(true).open(&path) {
+            file.seek(SeekFrom::Start(offset as u64)).unwrap();
+            file.write_all(data).unwrap();
+
+            let mut attrs = fs.get_inode(inode).unwrap();
+            attrs.last_metadata_changed = time_now();
+            attrs.last_modified = time_now();
+            if data.len() + offset as usize > attrs.size as usize {
+                attrs.size = (data.len() + offset as usize) as u64;
+            }
+            // #[cfg(feature = "abi-7-31")]
+            // if flags & FUSE_WRITE_KILL_PRIV as i32 != 0 {
+            //     clear_suid_sgid(&mut attrs);
+            // }
+            // XXX: In theory we should only need to do this when WRITE_KILL_PRIV is set for 7.31+
+            // However, xfstests fail in that case
+            clear_suid_sgid(&mut attrs);
+            fs.write_inode(&attrs);
+
+            return Ok(data.len() as u32);
+        } else {
+            return Err(Box::new(TritonFileError::UserInterfaceError(libc::EBADF)));
+        }
     }
 
     async fn lookup(
@@ -332,12 +392,82 @@ impl ServerFileSystem for RemoteFileSystem {
         req: &Request,
         parent: u64,
         name: &OsStr,
-    ) -> TritonFileResult<FileAttr> {
-        todo!()
+    ) -> TritonFileResult<FileAttr>{
+        let fs = &self.fs;
+        if name.len() > simple::MAX_NAME_LENGTH as usize {
+            return Err(Box::new(TritonFileError::UserInterfaceError(libc::ENAMETOOLONG)));
+        }
+        let parent_attrs = fs.get_inode(parent).unwrap();
+        if !check_access(
+            parent_attrs.uid,
+            parent_attrs.gid,
+            parent_attrs.mode,
+            req.uid(),
+            req.gid(),
+            libc::X_OK,
+        ) {
+            return Err(Box::new(TritonFileError::UserInterfaceError(libc::EACCES)));
+        }
+
+        match fs.lookup_name(parent, name) {
+            Ok(attrs) => Ok(attrs.into()),
+            Err(error_code) => Err(Box::new(TritonFileError::UserInterfaceError(error_code))),
+        }
     }
 
-    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<()> {
-        todo!()
+    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<()>{
+        let fs = &self.fs;
+
+        info!("unlink() called with {:?} {:?}", parent, name);
+        let mut attrs = match fs.lookup_name(parent, name) {
+            Ok(attrs) => attrs,
+            Err(error_code) => {
+                return Err(Box::new(TritonFileError::UserInterfaceError(error_code)));
+            }
+        };
+
+        let mut parent_attrs = match fs.get_inode(parent) {
+            Ok(attrs) => attrs,
+            Err(error_code) => {
+                return Err(Box::new(TritonFileError::UserInterfaceError(error_code)));
+            }
+        };
+
+        if !check_access(
+            parent_attrs.uid,
+            parent_attrs.gid,
+            parent_attrs.mode,
+            req.uid(),
+            req.gid(),
+            libc::W_OK,
+        ) {
+            return Err(Box::new(TritonFileError::UserInterfaceError(libc::EACCES)));
+        }
+
+        let uid = req.uid();
+        // "Sticky bit" handling
+        if parent_attrs.mode & libc::S_ISVTX as u16 != 0
+            && uid != 0
+            && uid != parent_attrs.uid
+            && uid != attrs.uid
+        {
+            return Err(Box::new(TritonFileError::UserInterfaceError(libc::EACCES)));
+        }
+
+        parent_attrs.last_metadata_changed = time_now();
+        parent_attrs.last_modified = time_now();
+        fs.write_inode(&parent_attrs);
+
+        attrs.hardlinks -= 1;
+        attrs.last_metadata_changed = time_now();
+        fs.write_inode(&attrs);
+        fs.gc_inode(&attrs);
+
+        let mut entries = fs.get_directory_content(parent).unwrap();
+        entries.remove(name.as_bytes());
+        fs.write_directory_content(parent, entries);
+
+        Ok(())
     }
 
     async fn create(
@@ -348,8 +478,80 @@ impl ServerFileSystem for RemoteFileSystem {
         mut mode: u32,
         _umask: u32,
         flags: i32,
-    ) -> TritonFileResult<(FileAttr, u64)> {
-        todo!()
+    ) -> TritonFileResult<(FileAttr, u64)>{
+        let fs = &self.fs;
+        info!("create() called with {:?} {:?}", parent, name);
+        if fs.lookup_name(parent, name).is_ok() {
+            return Err(Box::new(TritonFileError::UserInterfaceError(libc::EEXIST)));
+        }
+
+        let (read, write) = match flags & libc::O_ACCMODE {
+            libc::O_RDONLY => (true, false),
+            libc::O_WRONLY => (false, true),
+            libc::O_RDWR => (true, true),
+            // Exactly one access mode flag must be specified
+            _ => {
+                return Err(Box::new(TritonFileError::UserInterfaceError(libc::EINVAL)));
+            }
+        };
+
+        let mut parent_attrs = match fs.get_inode(parent) {
+            Ok(attrs) => attrs,
+            Err(error_code) => {
+                return Err(Box::new(TritonFileError::UserInterfaceError(error_code)));
+            }
+        };
+
+        if !check_access(
+            parent_attrs.uid,
+            parent_attrs.gid,
+            parent_attrs.mode,
+            req.uid(),
+            req.gid(),
+            libc::W_OK,
+        ) {
+            return Err(Box::new(TritonFileError::UserInterfaceError(libc::EACCES)));
+        }
+        parent_attrs.last_modified = time_now();
+        parent_attrs.last_metadata_changed = time_now();
+        fs.write_inode(&parent_attrs);
+
+        if req.uid() != 0 {
+            mode &= !(libc::S_ISUID | libc::S_ISGID) as u32;
+        }
+
+        let inode = fs.allocate_next_inode();
+        let attrs = InodeAttributes {
+            inode,
+            open_file_handles: 1,
+            size: 0,
+            last_accessed: time_now(),
+            last_modified: time_now(),
+            last_metadata_changed: time_now(),
+            kind: simple::as_file_kind(mode),
+            mode: fs.creation_mode(mode),
+            hardlinks: 1,
+            uid: req.uid(),
+            gid: simple::creation_gid(&parent_attrs, req.gid()),
+            xattrs: Default::default(),
+        };
+        fs.write_inode(&attrs);
+        File::create(fs.content_path(inode)).unwrap();
+
+        if simple::as_file_kind(mode) == FileKind::Directory {
+            let mut entries = BTreeMap::new();
+            entries.insert(b".".to_vec(), (inode, FileKind::Directory));
+            entries.insert(b"..".to_vec(), (parent, FileKind::Directory));
+            fs.write_directory_content(inode, entries);
+        }
+
+        let mut entries = fs.get_directory_content(parent).unwrap();
+        entries.insert(name.as_bytes().to_vec(), (inode, attrs.kind));
+        fs.write_directory_content(parent, entries);
+
+        // TODO: implement flags
+
+        Ok((attrs.into(), fs.allocate_next_file_handle(read, write)))
     }
 }
 
@@ -377,49 +579,49 @@ pub trait BinStorage: Send + Sync {
     async fn bin(&self, name: &str) -> TritonFileResult<Box<dyn Storage>>;
 }
 
-// #[cfg(test)]
-// mod test {
-//     use crate::{
-//         error::TritonFileResult,
-//         storage::{KeyValue, Pattern, Storage},
-//     };
+#[cfg(test)]
+mod test {
+    use crate::{
+        error::TritonFileResult,
+        storage::{KeyValue, Pattern, Storage},
+    };
 
-//     use super::{KeyList, KeyString, RemoteFileSystem};
+    use super::{KeyList, KeyString, RemoteFileSystem};
 
-//     async fn setup_test_storage() -> RemoteFileSystem {
-//         let storage = RemoteFileSystem::new(1);
-//         storage
-//             .set(&KeyValue {
-//                 key: "test".to_string(),
-//                 value: "test-value".to_string(),
-//             })
-//             .await
-//             .unwrap();
-//         storage
-//             .list_append(&KeyValue {
-//                 key: "test".to_string(),
-//                 value: "test-value".to_string(),
-//             })
-//             .await
-//             .unwrap();
-//         storage
-//     }
+    async fn setup_test_storage() -> RemoteFileSystem {
+        let storage = RemoteFileSystem::new(1);
+        storage
+            .set(&KeyValue {
+                key: "test".to_string(),
+                value: "test-value".to_string(),
+            })
+            .await
+            .unwrap();
+        storage
+            .list_append(&KeyValue {
+                key: "test".to_string(),
+                value: "test-value".to_string(),
+            })
+            .await
+            .unwrap();
+        storage
+    }
 
-//     #[tokio::test]
-//     async fn storage_get_set() -> TritonFileResult<()> {
-//         let storage = RemoteFileSystem::new(1);
-//         assert_eq!(
-//             true,
-//             storage
-//                 .set(&KeyValue {
-//                     key: "test".to_string(),
-//                     value: "test-value".to_string()
-//                 })
-//                 .await?
-//         );
-//         assert_eq!(Some("test-value".to_string()), storage.get("test").await?);
-//         Ok(())
-//     }
+    #[tokio::test]
+    async fn storage_get_set() -> TritonFileResult<()> {
+        let storage = RemoteFileSystem::new(1);
+        assert_eq!(
+            true,
+            storage
+                .set(&KeyValue {
+                    key: "test".to_string(),
+                    value: "test-value".to_string()
+                })
+                .await?
+        );
+        assert_eq!(Some("test-value".to_string()), storage.get("test").await?);
+        Ok(())
+    }
 
 //     #[tokio::test]
 //     async fn storage_get_empty() -> TritonFileResult<()> {
@@ -561,4 +763,4 @@ pub trait BinStorage: Send + Sync {
 //         let c2 = storage.clock(0).await.unwrap();
 //         assert_eq!(true, c2 > c1);
 //     }
-// }
+}

@@ -32,24 +32,24 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, fs, io};
 
-const BLOCK_SIZE: u64 = 512;
-const MAX_NAME_LENGTH: u32 = 255;
-const MAX_FILE_SIZE: u64 = 1024 * 1024 * 1024 * 1024;
+pub const BLOCK_SIZE: u64 = 512;
+pub const MAX_NAME_LENGTH: u32 = 255;
+pub const MAX_FILE_SIZE: u64 = 1024 * 1024 * 1024 * 1024;
 
 // Top two file handle bits are used to store permissions
 // Note: This isn't safe, since the client can modify those bits. However, this implementation
 // is just a toy
-const FILE_HANDLE_READ_BIT: u64 = 1 << 63;
-const FILE_HANDLE_WRITE_BIT: u64 = 1 << 62;
+pub const FILE_HANDLE_READ_BIT: u64 = 1 << 63;
+pub const FILE_HANDLE_WRITE_BIT: u64 = 1 << 62;
 
-const FMODE_EXEC: i32 = 0x20;
+pub const FMODE_EXEC: i32 = 0x20;
 
 type Inode = u64;
 
 type DirectoryDescriptor = BTreeMap<Vec<u8>, (Inode, FileKind)>;
 
 #[derive(Serialize, Deserialize, Copy, Clone, PartialEq)]
-enum FileKind {
+pub enum FileKind {
     File,
     Directory,
     Symlink,
@@ -109,7 +109,7 @@ fn parse_xattr_namespace(key: &[u8]) -> Result<XattrNamespace, c_int> {
     return Err(libc::ENOTSUP);
 }
 
-fn clear_suid_sgid(attr: &mut InodeAttributes) {
+pub fn clear_suid_sgid(attr: &mut InodeAttributes) {
     attr.mode &= !libc::S_ISUID as u16;
     // SGID is only suppose to be cleared if XGRP is set
     if attr.mode & libc::S_IXGRP as u16 != 0 {
@@ -117,7 +117,7 @@ fn clear_suid_sgid(attr: &mut InodeAttributes) {
     }
 }
 
-fn creation_gid(parent: &InodeAttributes, gid: u32) -> u32 {
+pub fn creation_gid(parent: &InodeAttributes, gid: u32) -> u32 {
     if parent.mode & libc::S_ISGID as u16 != 0 {
         return parent.gid;
     }
@@ -175,7 +175,7 @@ fn xattr_access_check(
     Ok(())
 }
 
-fn time_now() -> (i64, u32) {
+pub fn time_now() -> (i64, u32) {
     time_from_system_time(&SystemTime::now())
 }
 
@@ -199,7 +199,7 @@ fn time_from_system_time(system_time: &SystemTime) -> (i64, u32) {
 }
 
 #[derive(Serialize, Deserialize)]
-struct InodeAttributes {
+pub struct InodeAttributes {
     pub inode: Inode,
     pub open_file_handles: u64, // Ref count of open file handles to this inode
     pub size: u64,
@@ -240,6 +240,7 @@ impl From<InodeAttributes> for fuser::FileAttr {
     }
 }
 
+#[derive(Debug)]
 // Stores inode metadata data in "$data_dir/inodes" and file contents in "$data_dir/contents"
 // Directory data is stored in the file's contents, as a serialized DirectoryDescriptor
 pub struct SimpleFS {
@@ -275,7 +276,7 @@ impl SimpleFS {
         }
     }
 
-    fn creation_mode(&self, mode: u32) -> u16 {
+    pub fn creation_mode(&self, mode: u32) -> u16 {
         if !self.suid_support {
             (mode & !(libc::S_ISUID | libc::S_ISGID) as u32) as u16
         } else {
@@ -283,7 +284,7 @@ impl SimpleFS {
         }
     }
 
-    fn allocate_next_inode(&self) -> Inode {
+    pub fn allocate_next_inode(&self) -> Inode {
         let path = Path::new(&self.data_dir).join("superblock");
         let current_inode = if let Ok(file) = File::open(&path) {
             bincode::deserialize_from(file).unwrap()
@@ -302,7 +303,7 @@ impl SimpleFS {
         current_inode + 1
     }
 
-    fn allocate_next_file_handle(&self, read: bool, write: bool) -> u64 {
+    pub fn allocate_next_file_handle(&self, read: bool, write: bool) -> u64 {
         let mut fh = self.next_file_handle.fetch_add(1, Ordering::SeqCst);
         // Assert that we haven't run out of file handles
         assert!(fh < FILE_HANDLE_WRITE_BIT && fh < FILE_HANDLE_READ_BIT);
@@ -316,21 +317,21 @@ impl SimpleFS {
         fh
     }
 
-    fn check_file_handle_read(&self, file_handle: u64) -> bool {
+    pub fn check_file_handle_read(&self, file_handle: u64) -> bool {
         (file_handle & FILE_HANDLE_READ_BIT) != 0
     }
 
-    fn check_file_handle_write(&self, file_handle: u64) -> bool {
+    pub fn check_file_handle_write(&self, file_handle: u64) -> bool {
         (file_handle & FILE_HANDLE_WRITE_BIT) != 0
     }
 
-    fn content_path(&self, inode: Inode) -> PathBuf {
+    pub fn content_path(&self, inode: Inode) -> PathBuf {
         Path::new(&self.data_dir)
             .join("contents")
             .join(inode.to_string())
     }
 
-    fn get_directory_content(&self, inode: Inode) -> Result<DirectoryDescriptor, c_int> {
+    pub fn get_directory_content(&self, inode: Inode) -> Result<DirectoryDescriptor, c_int> {
         let path = Path::new(&self.data_dir)
             .join("contents")
             .join(inode.to_string());
@@ -341,7 +342,7 @@ impl SimpleFS {
         }
     }
 
-    fn write_directory_content(&self, inode: Inode, entries: DirectoryDescriptor) {
+    pub fn write_directory_content(&self, inode: Inode, entries: DirectoryDescriptor) {
         let path = Path::new(&self.data_dir)
             .join("contents")
             .join(inode.to_string());
@@ -354,7 +355,7 @@ impl SimpleFS {
         bincode::serialize_into(file, &entries).unwrap();
     }
 
-    fn get_inode(&self, inode: Inode) -> Result<InodeAttributes, c_int> {
+    pub fn get_inode(&self, inode: Inode) -> Result<InodeAttributes, c_int> {
         let path = Path::new(&self.data_dir)
             .join("inodes")
             .join(inode.to_string());
@@ -365,7 +366,7 @@ impl SimpleFS {
         }
     }
 
-    fn write_inode(&self, inode: &InodeAttributes) {
+    pub fn write_inode(&self, inode: &InodeAttributes) {
         let path = Path::new(&self.data_dir)
             .join("inodes")
             .join(inode.inode.to_string());
@@ -380,7 +381,7 @@ impl SimpleFS {
 
     // Check whether a file should be removed from storage. Should be called after decrementing
     // the link count, or closing a file handle
-    fn gc_inode(&self, inode: &InodeAttributes) -> bool {
+    pub fn gc_inode(&self, inode: &InodeAttributes) -> bool {
         if inode.hardlinks == 0 && inode.open_file_handles == 0 {
             let inode_path = Path::new(&self.data_dir)
                 .join("inodes")
@@ -397,7 +398,7 @@ impl SimpleFS {
         return false;
     }
 
-    fn truncate(
+    pub fn truncate(
         &self,
         inode: Inode,
         new_length: u64,
@@ -430,7 +431,7 @@ impl SimpleFS {
         Ok(attrs)
     }
 
-    fn lookup_name(&self, parent: u64, name: &OsStr) -> Result<InodeAttributes, c_int> {
+    pub fn lookup_name(&self, parent: u64, name: &OsStr) -> Result<InodeAttributes, c_int> {
         let entries = self.get_directory_content(parent)?;
         if let Some((inode, _)) = entries.get(name.as_bytes()) {
             return self.get_inode(*inode);
@@ -439,7 +440,7 @@ impl SimpleFS {
         }
     }
 
-    fn insert_link(
+    pub fn insert_link(
         &self,
         req: &Request,
         parent: u64,
@@ -1902,7 +1903,7 @@ pub fn check_access(
     return access_mask == 0;
 }
 
-fn as_file_kind(mut mode: u32) -> FileKind {
+pub fn as_file_kind(mut mode: u32) -> FileKind {
     mode &= libc::S_IFMT as u32;
 
     if mode == libc::S_IFREG as u32 {
