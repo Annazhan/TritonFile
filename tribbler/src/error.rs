@@ -15,6 +15,8 @@ pub enum TritonFileError {
     UserInterfaceError(c_int),
 }
 
+pub const SUCCESS: c_int = -1;
+
 
 impl Display for TritonFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

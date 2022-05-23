@@ -5,6 +5,7 @@ use bson::Bson;
 use fuser::Reply;
 use fuser::ReplyData;
 use fuser::Session;
+use libc::c_int;
 use log::error;
 use log::info;
 use std::cmp::min;
@@ -21,6 +22,7 @@ use std::{collections::HashMap, ffi::OsStr, fs, io::ErrorKind, sync::RwLock};
 use tokio::io::BufStream;
 use tokio_stream::{Stream, StreamExt};
 
+use crate::error;
 use crate::error::TritonFileError;
 use crate::error::TritonFileResult;
 use crate::simple;
@@ -118,7 +120,7 @@ pub trait ServerFileSystem {
         size: u32,
         _flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<String>;
+    ) -> TritonFileResult<(Option<String>, c_int)>;
 
     async fn write(
         &mut self,
@@ -130,16 +132,16 @@ pub trait ServerFileSystem {
         _write_flags: u32,
         #[allow(unused_variables)] flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<u32>;
+    ) -> TritonFileResult<(Option<u32>, c_int)>;
 
     async fn lookup(
         &mut self,
         req: &Request,
         parent: u64,
         name: &OsStr,
-    ) -> TritonFileResult<FileAttr>;
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)>;
 
-    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<()>;
+    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<c_int>;
 
     async fn create(
         &mut self,
@@ -149,7 +151,7 @@ pub trait ServerFileSystem {
         mut mode: u32,
         _umask: u32,
         flags: i32,
-    ) -> TritonFileResult<(FileAttr, u64)>;
+    ) -> TritonFileResult<(Option<(FileAttr, u64)>, c_int)>;
 }
 
 #[async_trait]
@@ -308,7 +310,7 @@ impl ServerFileSystem for RemoteFileSystem {
         size: u32,
         _flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<String>{
+    ) -> TritonFileResult<(Option<String>, c_int)>{
         let fs = &self.fs;
         info!(
             "read() called on {:?} offset={:?} size={:?}",
@@ -316,7 +318,7 @@ impl ServerFileSystem for RemoteFileSystem {
         );
         assert!(offset >= 0);
         if !fs.check_file_handle_read(fh) {
-            return Err(Box::new(TritonFileError::UserInterfaceError(libc::EACCES)));
+            return Ok((None, libc::EACCES));
         }
 
         let path = fs.content_path(inode);
@@ -327,9 +329,9 @@ impl ServerFileSystem for RemoteFileSystem {
 
             let mut buffer = vec![0; read_size as usize];
             file.read_exact_at(&mut buffer, offset as u64).unwrap();
-            return Ok(serde_json::to_string(&buffer).unwrap());
+            return Ok((Some(serde_json::to_string(&buffer).unwrap()), error::SUCCESS));
         } else {
-            return Err(Box::new(TritonFileError::UserInterfaceError(libc::ENOENT)));
+            return Ok((None, libc::ENOENT));
         }
     }
 
@@ -343,13 +345,13 @@ impl ServerFileSystem for RemoteFileSystem {
         _write_flags: u32,
         #[allow(unused_variables)] flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<u32>{
+    ) -> TritonFileResult<(Option<u32>, c_int)>{
         let fs = &self.fs;
 
         info!("write() called with {:?} size={:?}", inode, data.len());
         assert!(offset >= 0);
         if !fs.check_file_handle_write(fh) {
-            return Err(Box::new(TritonFileError::UserInterfaceError(libc::EACCES)));
+            return Ok((None, libc::EACCES));
         }
 
         let path = fs.content_path(inode);
@@ -372,9 +374,9 @@ impl ServerFileSystem for RemoteFileSystem {
             clear_suid_sgid(&mut attrs);
             fs.write_inode(&attrs);
 
-            return Ok(data.len() as u32);
+            return Ok((Some(data.len() as u32) , error::SUCCESS));
         } else {
-            return Err(Box::new(TritonFileError::UserInterfaceError(libc::EBADF)));
+            return Ok((None, libc::EBADF));
         }
     }
 
@@ -383,7 +385,7 @@ impl ServerFileSystem for RemoteFileSystem {
         req: &Request,
         parent: u64,
         name: &OsStr,
-    ) -> TritonFileResult<FileAttr>{
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)>{
         let fs = &self.fs;
         if name.len() > simple::MAX_NAME_LENGTH as usize {
             return Err(Box::new(TritonFileError::UserInterfaceError(libc::ENAMETOOLONG)));
@@ -397,30 +399,30 @@ impl ServerFileSystem for RemoteFileSystem {
             req.gid(),
             libc::X_OK,
         ) {
-            return Err(Box::new(TritonFileError::UserInterfaceError(libc::EACCES)));
+            return Ok((None, libc::EACCES));
         }
 
         match fs.lookup_name(parent, name) {
-            Ok(attrs) => Ok(attrs.into()),
-            Err(error_code) => Err(Box::new(TritonFileError::UserInterfaceError(error_code))),
+            Ok(attrs) => Ok((Some(attrs.into()), error::SUCCESS)),
+            Err(error_code) => Ok((None, error_code)),
         }
     }
 
-    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<()>{
+    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<c_int>{
         let fs = &self.fs;
 
         info!("unlink() called with {:?} {:?}", parent, name);
         let mut attrs = match fs.lookup_name(parent, name) {
             Ok(attrs) => attrs,
             Err(error_code) => {
-                return Err(Box::new(TritonFileError::UserInterfaceError(error_code)));
+                return Ok(error_code);
             }
         };
 
         let mut parent_attrs = match fs.get_inode(parent) {
             Ok(attrs) => attrs,
             Err(error_code) => {
-                return Err(Box::new(TritonFileError::UserInterfaceError(error_code)));
+                return Ok(error_code);
             }
         };
 
@@ -432,7 +434,7 @@ impl ServerFileSystem for RemoteFileSystem {
             req.gid(),
             libc::W_OK,
         ) {
-            return Err(Box::new(TritonFileError::UserInterfaceError(libc::EACCES)));
+            return Ok(libc::EACCES);
         }
 
         let uid = req.uid();
@@ -442,7 +444,7 @@ impl ServerFileSystem for RemoteFileSystem {
             && uid != parent_attrs.uid
             && uid != attrs.uid
         {
-            return Err(Box::new(TritonFileError::UserInterfaceError(libc::EACCES)));
+            return Ok(libc::EACCES);
         }
 
         parent_attrs.last_metadata_changed = time_now();
@@ -458,7 +460,7 @@ impl ServerFileSystem for RemoteFileSystem {
         entries.remove(name.as_bytes());
         fs.write_directory_content(parent, entries);
 
-        Ok(())
+        Ok(error::SUCCESS)
     }
 
     async fn create(
@@ -469,11 +471,11 @@ impl ServerFileSystem for RemoteFileSystem {
         mut mode: u32,
         _umask: u32,
         flags: i32,
-    ) -> TritonFileResult<(FileAttr, u64)>{
+    ) -> TritonFileResult<(Option<(FileAttr, u64)>, c_int)>{
         let fs = &self.fs;
         info!("create() called with {:?} {:?}", parent, name);
         if fs.lookup_name(parent, name).is_ok() {
-            return Err(Box::new(TritonFileError::UserInterfaceError(libc::EEXIST)));
+            return Ok((None, libc::EEXIST));
         }
 
         let (read, write) = match flags & libc::O_ACCMODE {
@@ -482,14 +484,14 @@ impl ServerFileSystem for RemoteFileSystem {
             libc::O_RDWR => (true, true),
             // Exactly one access mode flag must be specified
             _ => {
-                return Err(Box::new(TritonFileError::UserInterfaceError(libc::EINVAL)));
+                return Ok((None, libc::EINVAL));
             }
         };
 
         let mut parent_attrs = match fs.get_inode(parent) {
             Ok(attrs) => attrs,
             Err(error_code) => {
-                return Err(Box::new(TritonFileError::UserInterfaceError(error_code)));
+                return Ok((None, error_code));
             }
         };
 
@@ -501,7 +503,7 @@ impl ServerFileSystem for RemoteFileSystem {
             req.gid(),
             libc::W_OK,
         ) {
-            return Err(Box::new(TritonFileError::UserInterfaceError(libc::EACCES)));
+            return Ok((None, libc::EACCES));
         }
         parent_attrs.last_modified = time_now();
         parent_attrs.last_metadata_changed = time_now();
@@ -542,7 +544,7 @@ impl ServerFileSystem for RemoteFileSystem {
 
         // TODO: implement flags
 
-        Ok((attrs.into(), fs.allocate_next_file_handle(read, write)))
+        Ok((Some((attrs.into(), fs.allocate_next_file_handle(read, write))), error::SUCCESS))
     }
 }
 
