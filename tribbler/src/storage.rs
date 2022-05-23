@@ -173,7 +173,6 @@ pub struct RemoteFileSystem {
     kvs: RwLock<HashMap<String, String>>,
     kv_list: RwLock<HashMap<String, List>>,
     clock: RwLock<u64>,
-    session: BackgroundSession,
     fs: SimpleFS,
 }
 
@@ -192,23 +191,15 @@ impl RemoteFileSystem {
             options.push(MountOption::AllowOther);
         }
 
-        if !fs::metadata(format!("~/Desktop/tmp/{}", num)).is_ok() {
-            fs::create_dir(format!("~/Desktop/tmp/{}", num));
+        if !fs::metadata(format!("tmp/{}", num)).is_ok() {
+            fs::create_dir(format!("tmp/{}", num)).unwrap();
         }
-
-        let fs = SimpleFS::new("/tmp/fuser".to_string(), false, true);
-        let result = fuser::spawn_mount2(
-            fs,
-            format!("~/Desktop/tmp/{}", num),
-            &options,
-        );
 
         RemoteFileSystem { 
             kvs: RwLock::new(HashMap::new()), 
             kv_list: RwLock::new(HashMap::new()), 
             clock: RwLock::new(0), 
-            session: result.unwrap(),
-            fs: SimpleFS::new("/tmp/fuser".to_string(), false, true),
+            fs: SimpleFS::new(format!("tmp/{}", num), false,false),
         }
     }
 }
@@ -581,9 +572,15 @@ pub trait BinStorage: Send + Sync {
 
 #[cfg(test)]
 mod test {
+    use std::{process::Command, fs, path::{self, Path}};
+
+    use fuser::MountOption;
+    use log::info;
+    use path_absolutize::Absolutize;
+
     use crate::{
         error::TritonFileResult,
-        storage::{KeyValue, Pattern, Storage},
+        storage::{KeyValue, Pattern, Storage}, simple::SimpleFS,
     };
 
     use super::{KeyList, KeyString, RemoteFileSystem};
@@ -608,27 +605,41 @@ mod test {
     }
 
     #[tokio::test]
-    async fn storage_get_set() -> TritonFileResult<()> {
-        let storage = RemoteFileSystem::new(1);
-        assert_eq!(
-            true,
-            storage
-                .set(&KeyValue {
-                    key: "test".to_string(),
-                    value: "test-value".to_string()
-                })
-                .await?
-        );
-        assert_eq!(Some("test-value".to_string()), storage.get("test").await?);
+    async fn test_create_dir() -> TritonFileResult<()>{
+        if !fs::metadata(format!("tmp/{}", 2)).is_ok() {
+            println!("The directory is not found");
+            fs::create_dir_all(format!("tmp/{}", 2))?;
+        }
         Ok(())
     }
 
-//     #[tokio::test]
-//     async fn storage_get_empty() -> TritonFileResult<()> {
-//         let storage = setup_test_storage().await;
-//         assert_eq!(None, storage.get("test2").await?);
-//         Ok(())
-//     }
+    #[tokio::test]
+    async fn test_new_filesystem() -> TritonFileResult<()>{
+        let mut options = vec![MountOption::FSName(format!("fuser{}", 2))];
+        #[cfg(feature = "abi-7-26")]
+        {
+            options.push(MountOption::AutoUnmount);
+        }
+        #[cfg(not(feature = "abi-7-26"))]
+        {
+            options.push(MountOption::AutoUnmount);
+            options.push(MountOption::AllowOther);
+        }
+        let result = fuser::spawn_mount2(
+            SimpleFS::new("/tmp/fuser".to_string(), false, false),
+            format!("/tmp/mount_point/{}", 2),
+            &options,
+        );
+        Ok(())
+    }
+
+
+    // #[tokio::test]
+    // async fn storage_get_empty() -> TritonFileResult<()> {
+    //     let storage = setup_test_storage().await;
+    //     assert_eq!(None, storage.get("test2").await?);
+    //     Ok(())
+    // }
 
 //     #[tokio::test]
 //     async fn storage_keys() {
