@@ -1,7 +1,7 @@
 use crate::disfuser::disfuser_server::Disfuser;
-use fuser::{FileAttr, MountOption, Request, BackgroundSession};
-use storage::ServerFileSystem;
-
+use crate::storage::ServerFileSystem;
+use async_trait::async_trait;
+use fuser::{BackgroundSession, FileAttr, MountOption, Request};
 
 pub struct FuseInHeader {
     pub len: u32,
@@ -36,30 +36,37 @@ impl Disfuser for DisfuserServer {
         // and then stream it and send back to client
         let r_inner = request.into_inner();
         let in_header = FuseInHeader {
-            len: _,
-            opcode: _,
-            unique: _,
-            nodeid: _,
+            len: None,
+            opcode: None,
+            unique: None,
+            nodeid: None,
             uid: r_inner.uid,
             gid: r_inner.gid,
             pid: r_inner.pid,
-            padding: _,
+            padding: None,
         };
 
         let any_request = AnyRequest {
             header: &in_header,
-            data: _,
+            data: None,
         };
 
-        let request = Request{
-            ch: _,
-            data: _,
+        let request = Request {
+            ch: None,
+            data: None,
             request: any_request,
         };
 
         // problematic, return type is Result, current suppose res is a string
-        let result = self.filesystem.read(request, r_inner.inode, r_inner.fh, 
-            r_inner.offset, r_inner.size, r_inner.flags, r_inner.lock_owner);
+        let result = self.filesystem.read(
+            request,
+            r_inner.inode,
+            r_inner.fh,
+            r_inner.offset,
+            r_inner.size,
+            r_inner.flags,
+            r_inner.lock_owner,
+        );
         let repeat;
         match result {
             Ok(value) => {
@@ -68,7 +75,7 @@ impl Disfuser for DisfuserServer {
                     message: value,
                     errcod: -1,
                 });
-            },
+            }
             Err(err) => {
                 repeat = std::iter::repeat(Reply {
                     message: "",
@@ -95,10 +102,7 @@ impl Disfuser for DisfuserServer {
         });
 
         let output_stream = ReceiverStream::new(rx);
-        Ok(Response::new(
-            Box::pin(output_stream) as Self::readStream
-        ))
-
+        Ok(Response::new(Box::pin(output_stream) as Self::readStream))
     }
 
     async fn write(
@@ -109,30 +113,27 @@ impl Disfuser for DisfuserServer {
         // put them into an integrated data
         // put unwrapped value into ServerFileSystem write function
         // response the size data
-
     }
-
 
     async fn lookup(
         &self,
         request: tonic::Request<super::LookUp>,
     ) -> Result<tonic::Response<Self::lookupStream>, tonic::Status> {
-
     }
-
 
     async fn create(
         &self,
         request: tonic::Request<super::Create>,
     ) -> Result<tonic::Response<super::Bool>, tonic::Status> {
-
     }
-
 
     async fn unlink(
         &self,
         request: tonic::Request<super::Unlink>,
     ) -> Result<tonic::Response<super::Bool>, tonic::Status> {
-
     }
+
+    type readStream;
+
+    type lookupStream;
 }
