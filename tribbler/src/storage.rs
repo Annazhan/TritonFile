@@ -37,6 +37,12 @@ use fuser::{BackgroundSession, FileAttr, MountOption, Request};
 
 #[derive(Debug, Clone)]
 
+pub struct FileRequest {
+    uid: u32,
+    gid: u32,
+    pid: u32,
+}
+
 /// A type comprising key-value pair
 pub struct KeyValue {
     /// the key
@@ -113,7 +119,7 @@ pub trait KeyList {
 pub trait ServerFileSystem {
     async fn read(
         &self,
-        _req: &Request,
+        _req: &FileRequest,
         inode: u64,
         fh: u64,
         offset: i64,
@@ -124,7 +130,7 @@ pub trait ServerFileSystem {
 
     async fn write(
         &mut self,
-        _req: &Request,
+        _req: &FileRequest,
         inode: u64,
         fh: u64,
         offset: i64,
@@ -136,17 +142,21 @@ pub trait ServerFileSystem {
 
     async fn lookup(
         &mut self,
-        req: &Request,
+        req: &FileRequest,
         parent: u64,
         name: &OsStr,
     ) -> TritonFileResult<(Option<FileAttr>, c_int)>;
 
-    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr)
-        -> TritonFileResult<c_int>;
+    async fn unlink(
+        &mut self,
+        req: &FileRequest,
+        parent: u64,
+        name: &OsStr,
+    ) -> TritonFileResult<c_int>;
 
     async fn create(
         &mut self,
-        req: &Request,
+        req: &FileRequest,
         parent: u64,
         name: &OsStr,
         mut mode: u32,
@@ -303,7 +313,7 @@ impl KeyList for RemoteFileSystem {
 impl ServerFileSystem for RemoteFileSystem {
     async fn read(
         &self,
-        _req: &Request,
+        _req: &FileRequest,
         inode: u64,
         fh: u64,
         offset: i64,
@@ -340,7 +350,7 @@ impl ServerFileSystem for RemoteFileSystem {
 
     async fn write(
         &mut self,
-        _req: &Request,
+        _req: &FileRequest,
         inode: u64,
         fh: u64,
         offset: i64,
@@ -385,7 +395,7 @@ impl ServerFileSystem for RemoteFileSystem {
 
     async fn lookup(
         &mut self,
-        req: &Request,
+        req: &FileRequest,
         parent: u64,
         name: &OsStr,
     ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
@@ -400,8 +410,8 @@ impl ServerFileSystem for RemoteFileSystem {
             parent_attrs.uid,
             parent_attrs.gid,
             parent_attrs.mode,
-            req.uid(),
-            req.gid(),
+            req.uid,
+            req.gid,
             libc::X_OK,
         ) {
             return Ok((None, libc::EACCES));
@@ -415,7 +425,7 @@ impl ServerFileSystem for RemoteFileSystem {
 
     async fn unlink(
         &mut self,
-        req: &Request,
+        req: &FileRequest,
         parent: u64,
         name: &OsStr,
     ) -> TritonFileResult<c_int> {
@@ -440,14 +450,14 @@ impl ServerFileSystem for RemoteFileSystem {
             parent_attrs.uid,
             parent_attrs.gid,
             parent_attrs.mode,
-            req.uid(),
-            req.gid(),
+            req.uid,
+            req.gid,
             libc::W_OK,
         ) {
             return Ok(libc::EACCES);
         }
 
-        let uid = req.uid();
+        let uid = req.uid;
         // "Sticky bit" handling
         if parent_attrs.mode & libc::S_ISVTX as u16 != 0
             && uid != 0
@@ -475,7 +485,7 @@ impl ServerFileSystem for RemoteFileSystem {
 
     async fn create(
         &mut self,
-        req: &Request,
+        req: &FileRequest,
         parent: u64,
         name: &OsStr,
         mut mode: u32,
@@ -509,8 +519,8 @@ impl ServerFileSystem for RemoteFileSystem {
             parent_attrs.uid,
             parent_attrs.gid,
             parent_attrs.mode,
-            req.uid(),
-            req.gid(),
+            req.uid,
+            req.gid,
             libc::W_OK,
         ) {
             return Ok((None, libc::EACCES));
@@ -519,7 +529,7 @@ impl ServerFileSystem for RemoteFileSystem {
         parent_attrs.last_metadata_changed = time_now();
         fs.write_inode(&parent_attrs);
 
-        if req.uid() != 0 {
+        if req.uid != 0 {
             mode &= !(libc::S_ISUID | libc::S_ISGID) as u32;
         }
 
@@ -534,8 +544,8 @@ impl ServerFileSystem for RemoteFileSystem {
             kind: simple::as_file_kind(mode),
             mode: fs.creation_mode(mode),
             hardlinks: 1,
-            uid: req.uid(),
-            gid: simple::creation_gid(&parent_attrs, req.gid()),
+            uid: req.uid,
+            gid: simple::creation_gid(&parent_attrs, req.gid),
             xattrs: Default::default(),
         };
         fs.write_inode(&attrs);
