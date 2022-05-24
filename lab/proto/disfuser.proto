@@ -66,7 +66,7 @@ message FRequest {
 
 message Reply {
     string message = 1; // [u8] or fileAttr string
-    i32 errcode = 2; // for the Err when unwrap
+    int32 errcode = 2; // for the Err when unwrap
 }
 
 message Read {
@@ -81,7 +81,7 @@ message Read {
 
 message writeReply {
     uint32 size = 1;
-    i32 errcode = 2;
+    int32 errcode = 2;
 }
 
 // message WriteFlag {
@@ -142,7 +142,7 @@ message Create {
 }
 
 message unlinkReply {
-    i32 errcode = 1;
+    int32 errcode = 1;
 }
 
 message Unlink {
@@ -155,7 +155,7 @@ message Unlink {
 message createReply {
     string fileAttr = 1;
     uint64 fh = 2;
-    i32 errcode = 3;
+    int32 errcode = 3;
 }
 
 
