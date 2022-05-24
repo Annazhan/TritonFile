@@ -4,80 +4,20 @@ syntax = "proto3";
 // DO NOT MODIFY
 package disfuser;
 
-message FuseInHeader {
-    uint32 len = 1; //  uint32
-    uint32 opcode = 2;
-    uint64 unique = 3;
-    uint64 nodeid = 4;
-    uint32 uid = 5;
-    uint32 gid = 6;
-    uint32 pid = 7;
-    uint32 padding = 8;
-}
-
-message FuseOutHeader {
-    uint32 len = 1; //  uint32
-    int32 error = 2;
-    uint64 unique = 3;
-}
-
-message AnyRequest {
-    FuseInHeader header = 1;
-    uint32 data = 2; // [u8]
-  }
-
-// Add your message and service definitions below this line
 message FRequest {
-    int64 ChannelSender = 1;
-    uint32 data = 2; // [u8]
-    AnyRequest request = 3;
-  }
-
-
-message INO {
-    uint64 ino = 1;
-}
-
-message FH {
-    uint64 fh = 1;
-}
-
-message Offset {
-    int64 offset = 1;
-}
-
-message Size {
-    uint32 size = 1;
-}
-
-message Flags {
-    int32 flags = 1;
-}
-
-message Lock_Owner {
-    uint64 lock_owner = 1;
-}
-
-message Reply {
-    uint32 message = 1; // [u8]
+    uint32 uid = 1;
+    uint32 gid = 2;
+    uint32 pid = 3;
 }
 
 message Read {
     FRequest frequest = 1;
-    INO ino = 2;
-    FH fh = 3;
-    Offset offset= 4;
-    Size size = 5;
-    Flags flags = 6;
-    Lock_Owner lock_owner = 7;
-}
-
-message ReplyWrite {
-    uint32 size = 1;
-}
-
-message WriteFlag {
-    uint32 write_flag = 1;
+    uint64 ino = 2;
+    uint64 fh = 3;
+    int64 offset= 4;
+    uint32 size = 5;
+    int32 flags = 6;
+    uint64 lock_owner = 7;
 }
 
 message Data {
@@ -86,66 +26,63 @@ message Data {
 
 message Write {
     FRequest frequest = 1;
-    INO ino = 2;
-    FH fh = 3;
-    Offset offset= 4;
-    Data data = 5;
-    WriteFlag write_flag = 6;
-    Flags flags = 7;
-    Lock_Owner lock_owner = 8;
-}
-
-
-message Parent {
-    uint64 parent = 1;
-}
-
-message OsStr {
-    Slice inner = 1;
+    uint64 ino = 2;
+    uint64 fh = 3;
+    int64 offset= 4;
+    string data = 5; // [u8]
+    uint32 write_flag = 6;
+    int32 flags = 7;
+    uint64 lock_owner = 8;
 }
 
 message LookUp {
     FRequest frequest = 1;
-    Parent parent = 2;
-    OsStr name = 3;
-}
-
-message Slice {
-    uint32 inner = 1; // [u8]
-}
-
-message Mode {
-    uint32 mode = 1;
-}
-
-message Umask {
-    uint32 mask = 1;
+    uint64 parent = 2;
+    // OsStr name = 3;
+    string name = 3;
 }
 
 message Create {
     FRequest frequest = 1;
-    Parent parent = 2;
-    OsStr name = 3;
-    Mode mode= 4;
-    Umask umask = 5;
-    Flags flags = 6;
-}
-
-message Bool {
-    bool bool = 1;
+    uint64 parent = 2;
+    // OsStr name = 3;
+    string name = 3;
+    uint32 mode= 4;
+    uint32 umask = 5;
+    int32 flags = 6;
 }
 
 message Unlink {
     FRequest frequest = 1;
-    Parent parent = 2;
-    OsStr name = 3;
+    uint64 parent = 2;
+    // OsStr name = 3;
+    string name = 3;
 }
 
+message Reply {
+    string message = 1; // [u8] or fileAttr string
+    int32 errcode = 2; // for the Err when unwrap
+}
 
-service KeeperWork {
-    rpc read(Read) returns (Reply) {}
-    rpc write(Write) returns (ReplyWrite) {}
-    rpc lookup(LookUp) returns (Reply) {} // reply value?
-    rpc create(Create) returns (Bool) {} // reply value?
-    rpc unlink(Unlink) returns (Bool) {} // reply value?
+message writeReply {
+    uint32 size = 1;
+    int32 errcode = 2;
+}
+
+message createReply {
+    string fileAttr = 1;
+    uint64 fh = 2;
+    int32 errcode = 3;
+}
+
+message unlinkReply {
+    int32 errcode = 1;
+}
+
+service disfuser {
+    rpc read(Read) returns (stream Reply) {}
+    rpc write(stream Write) returns (writeReply) {}
+    rpc lookup(LookUp) returns (Reply) {} 
+    rpc create(Create) returns (createReply) {} 
+    rpc unlink(Unlink) returns (unlinkReply) {} 
 }
