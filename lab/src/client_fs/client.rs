@@ -9,6 +9,7 @@ use tribbler::storage;
 use tribbler::storage::{KeyList, KeyString, Storage};
 use tribbler::disfuser;
 
+pub const slice_size: usize = 1024; 
 pub struct StorageClient {
     channel: Mutex<Channel>,
 }
@@ -30,10 +31,45 @@ impl StorageClient {
     }
 }
 
-fn echo_requests_iter() -> impl Stream<Item = Write> {
-    tokio_stream::iter(1..usize::MAX).map(|i| Write {
-        message: format!("msg {:02}", i),
-    })
+fn write_requests_iter(
+    _req: &Request,
+    inode: u64,
+    fh: u64,
+    offset: i64,
+    data: &[u8],
+    _write_flags: u32,
+    #[allow(unused_variables)] flags: i32,
+    _lock_owner: Option<u64>, 
+) -> impl Stream<Item = Write> {
+    let data_string = serde_json::to_string(data); 
+    let data_len = data_string.len();
+
+    let mut n = data_len/slice_size; 
+    if data_len % slice_size!=0{
+        n += 1; 
+    }
+
+    let mut vec: Vec<disfuser::Write> = Vec::new();
+    let mut start = 0; 
+    let mut end = 0;
+
+    for i in 0..n {
+        start = i * slice_size; 
+        end = min(start + slice_size, data_len);
+        let element = disfuser::Write{
+            _req, 
+            inode,
+            fh,
+            offset,
+            data_string.clone()[start..end].to_string(),
+            _write_flags,
+            flags,
+            _lock_owner
+        }; 
+        vec.push(element); 
+    }
+
+    return Stream::iter(vec)
 }
 
 impl ServerFileSystem for StorageClient{
@@ -94,21 +130,24 @@ impl ServerFileSystem for StorageClient{
         #[allow(unused_variables)] flags: i32,
         _lock_owner: Option<u64>,
     ) -> TritonFileResult<(Option<u32>, c_int)>{
-        //stream writing
-        todo!();
         let mut client = self.client().await;
+        
+        // write stream
+        let in_stream = write_requests_iter(
+            _req, 
+            inode,
+            fh,
+            offset,
+            data,
+            _write_flags,
+            flags,
+            _lock_owner
+        );
+
         let result = client
-            .write(disfuser::Write{
-                _req, 
-                inode,
-                fh,
-                offset,
-                data,
-                _write_flags,
-                flags,
-                _lock_owner
-            })
+            .write(in_stream)
             .await?;
+        
         let error_code = result.into_inner().errcode;
         if error_code!=SUCCESS{
             Ok((None, error_code))
@@ -137,32 +176,6 @@ impl ServerFileSystem for StorageClient{
         let received_attr = result.into_inner().message;
         let fileattr = serde_json::from_str::<FileAttr>(received_attr).unwrap();
         Ok((fileattr, SUCCESS))
-        // let stream = client
-        //     .lookup(disfuser::LookUp {
-        //         req, 
-        //         parent,
-        //         name
-        //     })
-        //     .await
-        //     .unwrap()
-        //     .into_inner();
-        
-        // let mut received : Vec<String> = Vec::new();
-        // let mut error_code: u64; 
-        // let mut stream = stream.take();
-        // while let Some(item) = stream.next().await {
-        //     received.push(item.unwrap().message);
-        //     error_code = item.unwrap().success; 
-        //     if error_code!= NON_ERROR{
-        //         Err(error_code)
-        //     }
-        // }
-        // let joined_received = received.join("");
-        // let fileattr = serde_json::from_str::<FileAttr>(joined_received).unwrap();
-        // Ok(fileattr)
-        // receive stream Reply
-        // Return FileAttr
-        // binstore return FileAttr  
     }
 
     async fn create(
