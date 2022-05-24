@@ -145,12 +145,12 @@ impl ReliableStore {
         self.get_store(2).await
     }
 
-    async fn lookup(&self, key: &str) -> TribResult<u64> {
-        loop {
-            let primary = self.primary_store().await?;
-            Ok(1)
-        }
-    }
+    // async fn lookup(&self, key: &str) -> TribResult<u64> {
+    //     loop {
+    //         let primary = self.primary_store().await?;
+    //         Ok(1)
+    //     }
+    // }
 
     // Get sorted ops for key, key should be already composed.
     async fn get_sorted_ops(&self, key: &str) -> TribResult<Vec<LogOp>> {
@@ -495,12 +495,14 @@ impl ServerFileSystem for ReliableStore{
         size: u32,
         _flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<String>{
+    ) -> TritonFileResult<(Option<String>, c_int)>{
         loop {
             let primary = self.primary_store().await?;
             match primary.read(_req, inode, fh, offset, size, _flags, _lock_owner).await {
-                Err(_) => continue,
-                Ok(res) => return Ok(res),
+                Ok(res) => {
+                    Ok(res)
+                }, 
+                Err(_) => continue
             }
         }
     }
@@ -515,13 +517,15 @@ impl ServerFileSystem for ReliableStore{
         _write_flags: u32,
         #[allow(unused_variables)] flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<u32>{
+    ) -> TritonFileResult<(Option<u32>, c_int)>{
         loop {
             let primary = self.primary_store().await?;
             match primary.write(_req, inode, fh, offset, data, _write_flags, flags, _lock_owner)
             .await{
-                Err(_) => continue,
-                Ok(_) => break,
+                Ok(res) => {
+                    Ok(res)
+                },
+                Err(_) => continue 
             }
         }
 
@@ -529,8 +533,10 @@ impl ServerFileSystem for ReliableStore{
             let backup = self.backup_store().await?;
             match backup.write(_req, inode, fh, offset, data, _write_flags, flags, _lock_owner)
             .await{
-                Err(_) => continue,
-                Ok(res) => return Ok(res)
+                Ok(res) => {
+                    Ok(res)
+                },
+                Err(_) => continue 
             }
         }
     }
@@ -540,23 +546,27 @@ impl ServerFileSystem for ReliableStore{
         req: &Request,
         parent: u64,
         name: &OsStr,
-    ) -> TritonFileResult<FileAttr>{
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)>{
         loop {
             let primary = self.primary_store().await?;
-            match primary.lookup(req, parent, name).await {
-                Err(_) => continue,
-                Ok(res) => return Ok(res),
+            match primary.lookup(req, parent, name).await{
+                Ok(res) => {
+                    Ok(res)
+                },
+                Err(_) => continue
             }
         }
     }
 
-    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<()>{
+    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<c_int>{
         loop {
             let primary = self.primary_store().await?;
             match primary.unlink(req, parent, name)
             .await{
-                Err(_) => continue,
-                Ok(_) => break,
+                Ok(res) => {
+                    Ok(res)
+                },
+                Err(_) => continue
             }
         }
 
@@ -564,8 +574,10 @@ impl ServerFileSystem for ReliableStore{
             let backup = self.backup_store().await?;
             match backup.unlink(req, parent, name)
             .await{
-                Err(_) => continue,
-                Ok(_) => return Ok()
+                Ok(res) => {
+                    Ok(res)
+                },
+                Err(_) => continue
             }
         }
     }
@@ -578,22 +590,26 @@ impl ServerFileSystem for ReliableStore{
         mut mode: u32,
         _umask: u32,
         flags: i32,
-    ) -> TritonFileResult<(FileAttr, u64)>{
+    ) -> TritonFileResult<(Option<(FileAttr, u64)>, c_int)>{
         loop {
             let primary = self.primary_store().await?;
-            match primary.create(req, parent, name)
+            match primary.create(req, parent, name, mode, _umask, flags)
             .await{
-                Err(_) => continue,
-                Ok(_) => break,
+                Ok(res) => {
+                    Ok(res)
+                },
+                Err(_) => continue
             }
         }
 
         loop{
             let backup = self.backup_store().await?;
-            match backup.create(req, parent, name)
+            match backup.create(req, parent, name, mode, _umask, flags)
             .await{
-                Err(_) => continue,
-                Ok(res) => return Ok(res)
+                Ok(res) => {
+                    Ok(res)
+                },
+                Err(_) => continue
             }
         }
     }

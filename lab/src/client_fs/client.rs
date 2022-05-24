@@ -8,7 +8,6 @@ use tribbler::rpc::trib_storage_client::TribStorageClient;
 use tribbler::storage;
 use tribbler::storage::{KeyList, KeyString, Storage};
 use tribbler::disfuser;
-pub const NON_ERROR:u64 = -1; 
 
 pub struct StorageClient {
     channel: Mutex<Channel>,
@@ -31,6 +30,12 @@ impl StorageClient {
     }
 }
 
+fn echo_requests_iter() -> impl Stream<Item = Write> {
+    tokio_stream::iter(1..usize::MAX).map(|i| Write {
+        message: format!("msg {:02}", i),
+    })
+}
+
 impl ServerFileSystem for StorageClient{
     async fn read(
         &self,
@@ -41,7 +46,7 @@ impl ServerFileSystem for StorageClient{
         size: u32,
         _flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<String>{
+    ) -> TritonFileResult<(Option<String>, c_int)>{
         // client return string 
         // binstore return string  
         // front: string -> vec[u8]
@@ -69,13 +74,13 @@ impl ServerFileSystem for StorageClient{
         let mut stream = stream.take();
         while let Some(item) = stream.next().await {
             received.push(item.unwrap().message);
-            error_code = item.unwrap().success; 
-            if error_code!= NON_ERROR{
-                Err(error_code)
+            error_code = item.unwrap().errcode; 
+            if error_code!=SUCCESS{
+                Ok((None, error_code))
             }
         }
         let joined_received = received.join("");
-        Ok(joined_received)
+        Ok((joined_received, SUCCESS))
     }
 
     async fn write(
@@ -88,7 +93,7 @@ impl ServerFileSystem for StorageClient{
         _write_flags: u32,
         #[allow(unused_variables)] flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<u32>{
+    ) -> TritonFileResult<(Option<u32>, c_int)>{
         //stream writing
         todo!();
         let mut client = self.client().await;
@@ -104,10 +109,11 @@ impl ServerFileSystem for StorageClient{
                 _lock_owner
             })
             .await?;
-        if result.into_inner().errcode!=NON_ERROR{
-            Err(result.into_inner().errcode)
+        let error_code = result.into_inner().errcode;
+        if error_code!=SUCCESS{
+            Ok((None, error_code))
         }
-        Ok(result.into_inner().size)
+        Ok((result.into_inner().size, SUCCESS))
     }
 
     async fn lookup(
@@ -115,31 +121,45 @@ impl ServerFileSystem for StorageClient{
         req: &Request,
         parent: u64,
         name: &OsStr,
-    ) -> TritonFileResult<FileAttr>{
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)>{
         let mut client = self.client().await;
-        let stream = client
+        let result = client
             .lookup(disfuser::LookUp {
                 req, 
                 parent,
                 name
             })
-            .await
-            .unwrap()
-            .into_inner();
-        
-        let mut received : Vec<String> = Vec::new();
-        let mut error_code: u64; 
-        let mut stream = stream.take();
-        while let Some(item) = stream.next().await {
-            received.push(item.unwrap().message);
-            error_code = item.unwrap().success; 
-            if error_code!= NON_ERROR{
-                Err(error_code)
-            }
+        .await?;
+        let error_code = result.into_inner().errcode;
+        if error_code!=SUCCESS{
+            Ok((None, error_code))
         }
-        let joined_received = received.join("");
-        let fileattr = serde_json::from_str::<FileAttr>(joined_received).unwrap();
-        Ok(fileattr)
+        let received_attr = result.into_inner().message;
+        let fileattr = serde_json::from_str::<FileAttr>(received_attr).unwrap();
+        Ok((fileattr, SUCCESS))
+        // let stream = client
+        //     .lookup(disfuser::LookUp {
+        //         req, 
+        //         parent,
+        //         name
+        //     })
+        //     .await
+        //     .unwrap()
+        //     .into_inner();
+        
+        // let mut received : Vec<String> = Vec::new();
+        // let mut error_code: u64; 
+        // let mut stream = stream.take();
+        // while let Some(item) = stream.next().await {
+        //     received.push(item.unwrap().message);
+        //     error_code = item.unwrap().success; 
+        //     if error_code!= NON_ERROR{
+        //         Err(error_code)
+        //     }
+        // }
+        // let joined_received = received.join("");
+        // let fileattr = serde_json::from_str::<FileAttr>(joined_received).unwrap();
+        // Ok(fileattr)
         // receive stream Reply
         // Return FileAttr
         // binstore return FileAttr  
@@ -153,7 +173,7 @@ impl ServerFileSystem for StorageClient{
         mut mode: u32,
         _umask: u32,
         flags: i32,
-    ) -> TritonFileResult<(FileAttr, u64)>{
+    ) -> TritonFileResult<(Option<(FileAttr, u64)>, c_int)>{
         let mut client = self.client().await;
         let result = client
             .create(disfuser::Create {
@@ -166,21 +186,21 @@ impl ServerFileSystem for StorageClient{
             })
             .await?;
         
-        let attr = result.into_inner().attr;
+        let attr = result.into_inner().fileAttr;
         let fh = result.into_inner().fh;
         let error_code = result.into_inner().errcode;
-        if error_code != NON_ERROR{
-            Err(error_code);
+        if error_code!=SUCCESS{
+            Ok((None, error_code))
         }
         let fileattr = serde_json::from_str::<FileAttr>(joined_received).unwrap();
-        Ok((fileattr, fh))
+        Ok(((fileattr, fh), SUCCESS))
         // receive string -> tuple
         // tuple -> fileattr, u64
         // let attr, fh = result.into_inner().attr, result.into_inner().fh; 
         // Ok((attr, fh))
     }
 
-    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<()>{
+    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<c_int>{
         let mut client = self.client().await;
         let result = client
             .unlink(disfuser::Unlink {
@@ -189,7 +209,11 @@ impl ServerFileSystem for StorageClient{
                 name
             })
             .await?;
-        Ok(())
+        let error_code = result.into_inner().errcode;
+        if error_code!=SUCCESS{
+            Ok(error_code)
+        }
+        Ok(SUCCESS)
     }
 }
 

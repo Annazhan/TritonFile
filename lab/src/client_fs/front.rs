@@ -19,6 +19,8 @@ use log::{error, LevelFilter};
 use serde::{Deserialize, Serialize};
 use std::cmp::min;
 use std::collections::BTreeMap;
+use std::error::Error;
+use std::f32::consts::E;
 use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
@@ -42,12 +44,14 @@ use tokio::sync::mpsc::Receiver;
 use tokio::time;
 use tokio::time::timeout;
 
-use tribbler::error::{TritonFileError, TritonFileResult};
+use tribbler::error::{TritonFileError, TritonFileResult, SUCCESS};
 use tribbler::{colon, storage};
 
 const BLOCK_SIZE: u64 = 512;
 const MAX_NAME_LENGTH: u32 = 255;
 const MAX_FILE_SIZE: u64 = 1024 * 1024 * 1024 * 1024;
+
+const ERR_CODE_PLACEHOLDER: i32 = 20;
 
 pub struct Front {
     // original Front
@@ -124,10 +128,6 @@ impl Front {
     }
 }
 
-fn compose_uid_ino(uid: &str, ino: &str) -> String {
-    format!("{}:{}", colon::escape(uid), colon::escape(ino),)
-}
-
 impl Filesystem for Front {
     fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         if name.len() > MAX_NAME_LENGTH as usize {
@@ -135,22 +135,30 @@ impl Filesystem for Front {
         }
 
         // ReliableStore
-        let bin_pre = self.binstore.bin(req.uid().to_string().as_str());
+        let uid = req.uid().to_string().clone();
+        let bin_pre = self.binstore.bin(uid.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(bin) => {
+            Ok(mut bin) => {
                 let bin_lookup_pre = bin.lookup(req, parent, name);
 
                 let res = self.runtime.block_on(bin_lookup_pre);
 
-                //InodeAttributes
+                //FileAttr
                 match res {
-                    Ok(attrs) => reply.entry(&Duration::new(0, 0), &attrs.into(), 0),
-                    Err(e) => reply.error(e),
+                    Ok((attrs_op, error_code)) => {
+                        if error_code != SUCCESS {
+                            reply.error(error_code);
+                        } else {
+                            let attrs = attrs_op.unwrap();
+                            reply.entry(&Duration::new(0, 0), &attrs, 0);
+                        }
+                    }
+                    Err(e) => Err(e),
                 }
             }
-            Err(_) => (),
+            Err(e) => Err(e),
         }
     }
 
@@ -166,7 +174,8 @@ impl Filesystem for Front {
         reply: ReplyData,
     ) {
         // ReliableStore
-        let bin_pre = self.binstore.bin(_req.uid().to_string().as_str());
+        let uid = _req.uid().to_string().clone();
+        let bin_pre = self.binstore.bin(uid.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
@@ -176,15 +185,20 @@ impl Filesystem for Front {
                 let res = self.runtime.block_on(bin_read_pre);
 
                 match res {
-                    Ok(string_data) => {
-                        let string_data: &str = &data;
-                        let data: Vec<u8> = str_data.as_bytes().to_vec();
-                        reply.data(&data)
+                    Ok((string_data_op, error_code)) => {
+                        if error_code != SUCCESS {
+                            reply.error(error_code);
+                        } else {
+                            let string_data = string_data_op.unwrap();
+                            let str_data: &str = &string_data;
+                            let data: Vec<u8> = str_data.as_bytes().to_vec();
+                            reply.data(&data)
+                        }
                     }
-                    Err(_) => reply.error(libc::ENOENT),
+                    Err(e) => Err(e),
                 }
             }
-            Err(_) => (),
+            Err(e) => Err(e),
         }
     }
 
@@ -201,11 +215,12 @@ impl Filesystem for Front {
         reply: ReplyWrite,
     ) {
         // ReliableStore
-        let bin_pre = self.binstore.bin(req.uid().to_string().as_str());
+        let uid = _req.uid().to_string().clone();
+        let bin_pre = self.binstore.bin(uid.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(bin) => {
+            Ok(mut bin) => {
                 let bin_write_pre = bin.write(
                     _req,
                     inode,
@@ -220,11 +235,18 @@ impl Filesystem for Front {
                 let res = self.runtime.block_on(bin_write_pre);
 
                 match res {
-                    Ok(written) => reply.written(written),
-                    Err(_) => reply.error(libc::EBADF),
+                    Ok((written_op, error_code)) => {
+                        if error_code != SUCCESS {
+                            reply.error(error_code)
+                        } else {
+                            let written = written_op.unwrap();
+                            reply.written(written)
+                        }
+                    }
+                    Err(e) => Err(e),
                 }
             }
-            Err(_) => (),
+            Err(e) => Err(e),
         }
     }
 
@@ -239,46 +261,57 @@ impl Filesystem for Front {
         reply: ReplyCreate,
     ) {
         // ReliableStore
-        let bin_pre = self.binstore.bin(req.uid().to_string().as_str());
+        let uid = req.uid().to_string().clone();
+        let bin_pre = self.binstore.bin(uid.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(bin) => {
+            Ok(mut bin) => {
                 let bin_create_pre = bin.create(req, parent, name, mode, _umask, flags);
 
                 let res = self.runtime.block_on(bin_create_pre);
 
                 match res {
                     Ok(res_info) => {
-                        let (attrs, fh) = res_info;
-                        reply.created(&Duration::new(0, 0), &attrs.into(), 0, fh, 0)
+                        let (attrs_fh_op, error_code) = res_info;
+                        if error_code != SUCCESS {
+                            reply.error(error_code);
+                        } else {
+                            let (attr, fh) = attrs_fh_op.unwrap();
+                            reply.created(&Duration::new(0, 0), &attrs.into(), 0, fh, 0)
+                        }
                     }
-                    Err(error_code) => reply.error(error_code),
+                    Err(e) => Err(e),
                 }
             }
-            Err(_) => (),
+            Err(e) => Err(e),
         }
     }
 
     fn unlink(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: ReplyEmpty) {
         // ReliableStore
-        let bin_pre = self.binstore.bin(req.uid().to_string().as_str());
+        let uid = _req.uid().to_string().clone();
+        let bin_pre = self.binstore.bin(uid.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(bin) => {
+            Ok(mut bin) => {
                 let bin_unlink_pre = bin.unlink(_req, parent, name);
 
                 let res = self.runtime.block_on(bin_unlink_pre);
 
                 match res {
-                    Ok(_) => {
-                        reply.ok();
+                    Ok(error_code) => {
+                        if error_code != SUCCESS {
+                            reply.error(error_code)
+                        } else {
+                            reply.ok();
+                        }
                     }
-                    Err(e) => reply.error(e),
+                    Err(e) => Err(e),
                 }
             }
-            Err(_) => (),
+            Err(e) => Err(e),
         }
     }
 }
