@@ -4,69 +4,10 @@ syntax = "proto3";
 // DO NOT MODIFY
 package disfuser;
 
-// message FuseInHeader {
-//     uint32 len = 1; //  uint32
-//     uint32 opcode = 2;
-//     uint64 unique = 3;
-//     uint64 nodeid = 4;
-//     uint32 uid = 5;
-//     uint32 gid = 6;
-//     uint32 pid = 7;
-//     uint32 padding = 8;
-// }
-
-// message FuseOutHeader {
-//     uint32 len = 1; //  uint32
-//     int32 error = 2;
-//     uint64 unique = 3;
-// }
-
-// message AnyRequest {
-//     FuseInHeader header = 1;
-//     uint32 data = 2; // [u8]
-//   }
-
-// // Add your message and service definitions below this line
-// message FRequest {
-//     int64 ChannelSender = 1;
-//     uint32 data = 2; // [u8]
-//     AnyRequest request = 3;
-//   }
-
 message FRequest {
     uint32 uid = 1;
     uint32 gid = 2;
     uint32 pid = 3;
-}
-
-
-// message INO {
-//     uint64 ino = 1;
-// }
-
-// message FH {
-//     uint64 fh = 1;
-// }
-
-// message Offset {
-//     int64 offset = 1;
-// }
-
-// message Size {
-//     uint32 size = 1;
-// }
-
-// message Flags {
-//     int32 flags = 1;
-// }
-
-// message Lock_Owner {
-//     uint64 lock_owner = 1;
-// }
-
-message Reply {
-    string message = 1; // [u8] or fileAttr string
-    int32 errcode = 2; // for the Err when unwrap
 }
 
 message Read {
@@ -78,15 +19,6 @@ message Read {
     int32 flags = 6;
     uint64 lock_owner = 7;
 }
-
-message writeReply {
-    uint32 size = 1;
-    int32 errcode = 2;
-}
-
-// message WriteFlag {
-//     uint32 write_flag = 1;
-// }
 
 message Data {
     uint32 data = 1; // [u8]
@@ -103,33 +35,12 @@ message Write {
     uint64 lock_owner = 8;
 }
 
-
-// message Parent {
-//     uint64 parent = 1;
-// }
-
-// message OsStr {
-//     Slice inner = 1;
-// }
-
 message LookUp {
     FRequest frequest = 1;
     uint64 parent = 2;
     // OsStr name = 3;
     string name = 3;
 }
-
-// message Slice {
-//     uint8 inner = 1; // [u8]
-// }
-
-// message Mode {
-//     uint32 mode = 1;
-// }
-
-// message Umask {
-//     uint32 mask = 1;
-// }
 
 message Create {
     FRequest frequest = 1;
@@ -141,15 +52,21 @@ message Create {
     int32 flags = 6;
 }
 
-message unlinkReply {
-    int32 errcode = 1;
-}
-
 message Unlink {
     FRequest frequest = 1;
     uint64 parent = 2;
     // OsStr name = 3;
     string name = 3;
+}
+
+message Reply {
+    string message = 1; // [u8] or fileAttr string
+    int32 errcode = 2; // for the Err when unwrap
+}
+
+message writeReply {
+    uint32 size = 1;
+    int32 errcode = 2;
 }
 
 message createReply {
@@ -158,6 +75,9 @@ message createReply {
     int32 errcode = 3;
 }
 
+message unlinkReply {
+    int32 errcode = 1;
+}
 
 service disfuser {
     rpc read(Read) returns (stream Reply) {}
