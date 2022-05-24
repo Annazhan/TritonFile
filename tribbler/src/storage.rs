@@ -38,9 +38,9 @@ use fuser::{BackgroundSession, FileAttr, MountOption, Request};
 #[derive(Debug, Clone)]
 
 pub struct FileRequest {
-    uid: u32,
-    gid: u32,
-    pid: u32,
+    pub uid: u32,
+    pub gid: u32,
+    pub pid: u32,
 }
 
 /// A type comprising key-value pair
