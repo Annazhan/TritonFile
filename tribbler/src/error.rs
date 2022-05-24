@@ -1,5 +1,5 @@
+use libc::c_int;
 use std::{error::Error, fmt::Display};
-use libc::{c_int};
 
 #[derive(Debug, Clone)]
 pub enum TritonFileError {
@@ -16,7 +16,6 @@ pub enum TritonFileError {
 }
 
 pub const SUCCESS: c_int = -1;
-
 
 impl Display for TritonFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -58,7 +57,7 @@ impl From<Box<dyn Error>> for TritonFileError {
 
 impl From<TritonFileError> for i32 {
     fn from(error: TritonFileError) -> Self {
-        match error{
+        match error {
             TritonFileError::UserInterfaceError(x) => x,
             _ => -1,
         }

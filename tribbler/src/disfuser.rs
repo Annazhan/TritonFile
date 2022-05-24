@@ -1,102 +1,115 @@
-// message FuseInHeader {
-//     uint32 len = 1; //  uint32
-//     uint32 opcode = 2;
-//     uint64 unique = 3;
-//     uint64 nodeid = 4;
-//     uint32 uid = 5;
-//     uint32 gid = 6;
-//     uint32 pid = 7;
-//     uint32 padding = 8;
-// }
-
-// message FuseOutHeader {
-//     uint32 len = 1; //  uint32
-//     int32 error = 2;
-//     uint64 unique = 3;
-// }
-
-// message AnyRequest {
-//     FuseInHeader header = 1;
-//     uint32 data = 2; // \[u8\]
-//   }
-
-// // Add your message and service definitions below this line
-// message FRequest {
-//     int64 ChannelSender = 1;
-//     uint32 data = 2; // \[u8\]
-//     AnyRequest request = 3;
-//   }
-
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FuseInHeader {
+    ///  uint32
+    #[prost(uint32, tag = "1")]
+    pub len: u32,
+    #[prost(uint32, tag = "2")]
+    pub opcode: u32,
+    #[prost(uint64, tag = "3")]
+    pub unique: u64,
+    #[prost(uint64, tag = "4")]
+    pub nodeid: u64,
+    #[prost(uint32, tag = "5")]
+    pub uid: u32,
+    #[prost(uint32, tag = "6")]
+    pub gid: u32,
+    #[prost(uint32, tag = "7")]
+    pub pid: u32,
+    #[prost(uint32, tag = "8")]
+    pub padding: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FuseOutHeader {
+    ///  uint32
+    #[prost(uint32, tag = "1")]
+    pub len: u32,
+    #[prost(int32, tag = "2")]
+    pub error: i32,
+    #[prost(uint64, tag = "3")]
+    pub unique: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AnyRequest {
+    #[prost(message, optional, tag = "1")]
+    pub header: ::core::option::Option<FuseInHeader>,
+    /// \[u8\]
+    #[prost(uint32, tag = "2")]
+    pub data: u32,
+}
+/// Add your message and service definitions below this line
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FRequest {
-    #[prost(uint32, tag = "1")]
-    pub uid: u32,
+    #[prost(int64, tag = "1")]
+    pub channel_sender: i64,
+    /// \[u8\]
     #[prost(uint32, tag = "2")]
-    pub gid: u32,
-    #[prost(uint32, tag = "3")]
-    pub pid: u32,
+    pub data: u32,
+    #[prost(message, optional, tag = "3")]
+    pub request: ::core::option::Option<AnyRequest>,
 }
-// message INO {
-//     uint64 ino = 1;
-// }
-
-// message FH {
-//     uint64 fh = 1;
-// }
-
-// message Offset {
-//     int64 offset = 1;
-// }
-
-// message Size {
-//     uint32 size = 1;
-// }
-
-// message Flags {
-//     int32 flags = 1;
-// }
-
-// message Lock_Owner {
-//     uint64 lock_owner = 1;
-// }
-
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Ino {
+    #[prost(uint64, tag = "1")]
+    pub ino: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Fh {
+    #[prost(uint64, tag = "1")]
+    pub fh: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Offset {
+    #[prost(int64, tag = "1")]
+    pub offset: i64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Size {
+    #[prost(uint32, tag = "1")]
+    pub size: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Flags {
+    #[prost(int32, tag = "1")]
+    pub flags: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LockOwner {
+    #[prost(uint64, tag = "1")]
+    pub lock_owner: u64,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Reply {
     /// \[u8\]
-    #[prost(string, tag = "1")]
-    pub message: ::prost::alloc::string::String,
-    /// for the Err when unwrap
-    #[prost(uint64, tag = "2")]
-    pub errcode: u64,
+    #[prost(uint32, tag = "1")]
+    pub message: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Read {
     #[prost(message, optional, tag = "1")]
     pub frequest: ::core::option::Option<FRequest>,
-    #[prost(uint64, tag = "2")]
-    pub ino: u64,
-    #[prost(uint64, tag = "3")]
-    pub fh: u64,
-    #[prost(int64, tag = "4")]
-    pub offset: i64,
-    #[prost(uint32, tag = "5")]
-    pub size: u32,
-    #[prost(int32, tag = "6")]
-    pub flags: i32,
-    #[prost(uint64, tag = "7")]
-    pub lock_owner: u64,
+    #[prost(message, optional, tag = "2")]
+    pub ino: ::core::option::Option<Ino>,
+    #[prost(message, optional, tag = "3")]
+    pub fh: ::core::option::Option<Fh>,
+    #[prost(message, optional, tag = "4")]
+    pub offset: ::core::option::Option<Offset>,
+    #[prost(message, optional, tag = "5")]
+    pub size: ::core::option::Option<Size>,
+    #[prost(message, optional, tag = "6")]
+    pub flags: ::core::option::Option<Flags>,
+    #[prost(message, optional, tag = "7")]
+    pub lock_owner: ::core::option::Option<LockOwner>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ReplyWrite {
     #[prost(uint32, tag = "1")]
     pub size: u32,
-    #[prost(uint64, tag = "2")]
-    pub errcode: u64,
 }
-// message WriteFlag {
-//     uint32 write_flag = 1;
-// }
-
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct WriteFlag {
+    #[prost(uint32, tag = "1")]
+    pub write_flag: u32,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Data {
     /// \[u8\]
@@ -107,67 +120,70 @@ pub struct Data {
 pub struct Write {
     #[prost(message, optional, tag = "1")]
     pub frequest: ::core::option::Option<FRequest>,
-    #[prost(uint64, tag = "2")]
-    pub ino: u64,
-    #[prost(uint64, tag = "3")]
-    pub fh: u64,
-    #[prost(int64, tag = "4")]
-    pub offset: i64,
-    /// \[u8\]
-    #[prost(string, tag = "5")]
-    pub data: ::prost::alloc::string::String,
-    #[prost(uint32, tag = "6")]
-    pub write_flag: u32,
-    #[prost(int32, tag = "7")]
-    pub flags: i32,
-    #[prost(uint64, tag = "8")]
-    pub lock_owner: u64,
+    #[prost(message, optional, tag = "2")]
+    pub ino: ::core::option::Option<Ino>,
+    #[prost(message, optional, tag = "3")]
+    pub fh: ::core::option::Option<Fh>,
+    #[prost(message, optional, tag = "4")]
+    pub offset: ::core::option::Option<Offset>,
+    #[prost(message, optional, tag = "5")]
+    pub data: ::core::option::Option<Data>,
+    #[prost(message, optional, tag = "6")]
+    pub write_flag: ::core::option::Option<WriteFlag>,
+    #[prost(message, optional, tag = "7")]
+    pub flags: ::core::option::Option<Flags>,
+    #[prost(message, optional, tag = "8")]
+    pub lock_owner: ::core::option::Option<LockOwner>,
 }
-// message Parent {
-//     uint64 parent = 1;
-// }
-
-// message OsStr {
-//     Slice inner = 1;
-// }
-
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Parent {
+    #[prost(uint64, tag = "1")]
+    pub parent: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OsStr {
+    #[prost(message, optional, tag = "1")]
+    pub inner: ::core::option::Option<Slice>,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct LookUp {
     #[prost(message, optional, tag = "1")]
     pub frequest: ::core::option::Option<FRequest>,
-    #[prost(uint64, tag = "2")]
-    pub parent: u64,
-    /// OsStr name = 3;
-    #[prost(string, tag = "3")]
-    pub name: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub parent: ::core::option::Option<Parent>,
+    #[prost(message, optional, tag = "3")]
+    pub name: ::core::option::Option<OsStr>,
 }
-// message Slice {
-//     uint8 inner = 1; // \[u8\]
-// }
-
-// message Mode {
-//     uint32 mode = 1;
-// }
-
-// message Umask {
-//     uint32 mask = 1;
-// }
-
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Slice {
+    /// \[u8\]
+    #[prost(uint32, tag = "1")]
+    pub inner: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Mode {
+    #[prost(uint32, tag = "1")]
+    pub mode: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Umask {
+    #[prost(uint32, tag = "1")]
+    pub mask: u32,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Create {
     #[prost(message, optional, tag = "1")]
     pub frequest: ::core::option::Option<FRequest>,
-    #[prost(uint64, tag = "2")]
-    pub parent: u64,
-    /// OsStr name = 3;
-    #[prost(string, tag = "3")]
-    pub name: ::prost::alloc::string::String,
-    #[prost(uint32, tag = "4")]
-    pub mode: u32,
-    #[prost(uint32, tag = "5")]
-    pub umask: u32,
-    #[prost(int32, tag = "6")]
-    pub flags: i32,
+    #[prost(message, optional, tag = "2")]
+    pub parent: ::core::option::Option<Parent>,
+    #[prost(message, optional, tag = "3")]
+    pub name: ::core::option::Option<OsStr>,
+    #[prost(message, optional, tag = "4")]
+    pub mode: ::core::option::Option<Mode>,
+    #[prost(message, optional, tag = "5")]
+    pub umask: ::core::option::Option<Umask>,
+    #[prost(message, optional, tag = "6")]
+    pub flags: ::core::option::Option<Flags>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Bool {
@@ -178,28 +194,20 @@ pub struct Bool {
 pub struct Unlink {
     #[prost(message, optional, tag = "1")]
     pub frequest: ::core::option::Option<FRequest>,
-    #[prost(uint64, tag = "2")]
-    pub parent: u64,
-    /// OsStr name = 3;
-    #[prost(string, tag = "3")]
-    pub name: ::prost::alloc::string::String,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CreateRply {
-    #[prost(string, tag = "1")]
-    pub file_attr: ::prost::alloc::string::String,
-    #[prost(uint64, tag = "2")]
-    pub code: u64,
+    #[prost(message, optional, tag = "2")]
+    pub parent: ::core::option::Option<Parent>,
+    #[prost(message, optional, tag = "3")]
+    pub name: ::core::option::Option<OsStr>,
 }
 #[doc = r" Generated client implementations."]
-pub mod disfuser_client {
+pub mod keeper_work_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
     #[derive(Debug, Clone)]
-    pub struct DisfuserClient<T> {
+    pub struct KeeperWorkClient<T> {
         inner: tonic::client::Grpc<T>,
     }
-    impl DisfuserClient<tonic::transport::Channel> {
+    impl KeeperWorkClient<tonic::transport::Channel> {
         #[doc = r" Attempt to create a new client by connecting to a given endpoint."]
         pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
         where
@@ -210,7 +218,7 @@ pub mod disfuser_client {
             Ok(Self::new(conn))
         }
     }
-    impl<T> DisfuserClient<T>
+    impl<T> KeeperWorkClient<T>
     where
         T: tonic::client::GrpcService<tonic::body::BoxBody>,
         T::ResponseBody: Body + Send + 'static,
@@ -224,7 +232,7 @@ pub mod disfuser_client {
         pub fn with_interceptor<F>(
             inner: T,
             interceptor: F,
-        ) -> DisfuserClient<InterceptedService<T, F>>
+        ) -> KeeperWorkClient<InterceptedService<T, F>>
         where
             F: tonic::service::Interceptor,
             T: tonic::codegen::Service<
@@ -236,7 +244,7 @@ pub mod disfuser_client {
             <T as tonic::codegen::Service<http::Request<tonic::body::BoxBody>>>::Error:
                 Into<StdError> + Send + Sync,
         {
-            DisfuserClient::new(InterceptedService::new(inner, interceptor))
+            KeeperWorkClient::new(InterceptedService::new(inner, interceptor))
         }
         #[doc = r" Compress requests with `gzip`."]
         #[doc = r""]
@@ -254,7 +262,7 @@ pub mod disfuser_client {
         pub async fn read(
             &mut self,
             request: impl tonic::IntoRequest<super::Read>,
-        ) -> Result<tonic::Response<tonic::codec::Streaming<super::Reply>>, tonic::Status> {
+        ) -> Result<tonic::Response<super::Reply>, tonic::Status> {
             self.inner.ready().await.map_err(|e| {
                 tonic::Status::new(
                     tonic::Code::Unknown,
@@ -262,14 +270,12 @@ pub mod disfuser_client {
                 )
             })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/read");
-            self.inner
-                .server_streaming(request.into_request(), path, codec)
-                .await
+            let path = http::uri::PathAndQuery::from_static("/disfuser.KeeperWork/read");
+            self.inner.unary(request.into_request(), path, codec).await
         }
         pub async fn write(
             &mut self,
-            request: impl tonic::IntoStreamingRequest<Message = super::Write>,
+            request: impl tonic::IntoRequest<super::Write>,
         ) -> Result<tonic::Response<super::ReplyWrite>, tonic::Status> {
             self.inner.ready().await.map_err(|e| {
                 tonic::Status::new(
@@ -278,15 +284,13 @@ pub mod disfuser_client {
                 )
             })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/write");
-            self.inner
-                .client_streaming(request.into_streaming_request(), path, codec)
-                .await
+            let path = http::uri::PathAndQuery::from_static("/disfuser.KeeperWork/write");
+            self.inner.unary(request.into_request(), path, codec).await
         }
         pub async fn lookup(
             &mut self,
             request: impl tonic::IntoRequest<super::LookUp>,
-        ) -> Result<tonic::Response<tonic::codec::Streaming<super::Reply>>, tonic::Status> {
+        ) -> Result<tonic::Response<super::Reply>, tonic::Status> {
             self.inner.ready().await.map_err(|e| {
                 tonic::Status::new(
                     tonic::Code::Unknown,
@@ -294,15 +298,13 @@ pub mod disfuser_client {
                 )
             })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/lookup");
-            self.inner
-                .server_streaming(request.into_request(), path, codec)
-                .await
+            let path = http::uri::PathAndQuery::from_static("/disfuser.KeeperWork/lookup");
+            self.inner.unary(request.into_request(), path, codec).await
         }
         pub async fn create(
             &mut self,
             request: impl tonic::IntoRequest<super::Create>,
-        ) -> Result<tonic::Response<super::CreateRply>, tonic::Status> {
+        ) -> Result<tonic::Response<super::Bool>, tonic::Status> {
             self.inner.ready().await.map_err(|e| {
                 tonic::Status::new(
                     tonic::Code::Unknown,
@@ -310,7 +312,7 @@ pub mod disfuser_client {
                 )
             })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/create");
+            let path = http::uri::PathAndQuery::from_static("/disfuser.KeeperWork/create");
             self.inner.unary(request.into_request(), path, codec).await
         }
         pub async fn unlink(
@@ -324,55 +326,47 @@ pub mod disfuser_client {
                 )
             })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/unlink");
+            let path = http::uri::PathAndQuery::from_static("/disfuser.KeeperWork/unlink");
             self.inner.unary(request.into_request(), path, codec).await
         }
     }
 }
 #[doc = r" Generated server implementations."]
-pub mod disfuser_server {
+pub mod keeper_work_server {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
-    #[doc = "Generated trait containing gRPC methods that should be implemented for use with DisfuserServer."]
+    #[doc = "Generated trait containing gRPC methods that should be implemented for use with KeeperWorkServer."]
     #[async_trait]
-    pub trait Disfuser: Send + Sync + 'static {
-        #[doc = "Server streaming response type for the read method."]
-        type readStream: futures_core::Stream<Item = Result<super::Reply, tonic::Status>>
-            + Send
-            + 'static;
+    pub trait KeeperWork: Send + Sync + 'static {
         async fn read(
             &self,
             request: tonic::Request<super::Read>,
-        ) -> Result<tonic::Response<Self::readStream>, tonic::Status>;
+        ) -> Result<tonic::Response<super::Reply>, tonic::Status>;
         async fn write(
             &self,
-            request: tonic::Request<tonic::Streaming<super::Write>>,
+            request: tonic::Request<super::Write>,
         ) -> Result<tonic::Response<super::ReplyWrite>, tonic::Status>;
-        #[doc = "Server streaming response type for the lookup method."]
-        type lookupStream: futures_core::Stream<Item = Result<super::Reply, tonic::Status>>
-            + Send
-            + 'static;
         async fn lookup(
             &self,
             request: tonic::Request<super::LookUp>,
-        ) -> Result<tonic::Response<Self::lookupStream>, tonic::Status>;
+        ) -> Result<tonic::Response<super::Reply>, tonic::Status>;
         async fn create(
             &self,
             request: tonic::Request<super::Create>,
-        ) -> Result<tonic::Response<super::CreateRply>, tonic::Status>;
+        ) -> Result<tonic::Response<super::Bool>, tonic::Status>;
         async fn unlink(
             &self,
             request: tonic::Request<super::Unlink>,
         ) -> Result<tonic::Response<super::Bool>, tonic::Status>;
     }
     #[derive(Debug)]
-    pub struct DisfuserServer<T: Disfuser> {
+    pub struct KeeperWorkServer<T: KeeperWork> {
         inner: _Inner<T>,
         accept_compression_encodings: (),
         send_compression_encodings: (),
     }
     struct _Inner<T>(Arc<T>);
-    impl<T: Disfuser> DisfuserServer<T> {
+    impl<T: KeeperWork> KeeperWorkServer<T> {
         pub fn new(inner: T) -> Self {
             let inner = Arc::new(inner);
             let inner = _Inner(inner);
@@ -389,9 +383,9 @@ pub mod disfuser_server {
             InterceptedService::new(Self::new(inner), interceptor)
         }
     }
-    impl<T, B> tonic::codegen::Service<http::Request<B>> for DisfuserServer<T>
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for KeeperWorkServer<T>
     where
-        T: Disfuser,
+        T: KeeperWork,
         B: Body + Send + 'static,
         B::Error: Into<StdError> + Send + 'static,
     {
@@ -404,14 +398,12 @@ pub mod disfuser_server {
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             let inner = self.inner.clone();
             match req.uri().path() {
-                "/disfuser.disfuser/read" => {
+                "/disfuser.KeeperWork/read" => {
                     #[allow(non_camel_case_types)]
-                    struct readSvc<T: Disfuser>(pub Arc<T>);
-                    impl<T: Disfuser> tonic::server::ServerStreamingService<super::Read> for readSvc<T> {
+                    struct readSvc<T: KeeperWork>(pub Arc<T>);
+                    impl<T: KeeperWork> tonic::server::UnaryService<super::Read> for readSvc<T> {
                         type Response = super::Reply;
-                        type ResponseStream = T::readStream;
-                        type Future =
-                            BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(&mut self, request: tonic::Request<super::Read>) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move { (*inner).read(request).await };
@@ -429,21 +421,18 @@ pub mod disfuser_server {
                             accept_compression_encodings,
                             send_compression_encodings,
                         );
-                        let res = grpc.server_streaming(method, req).await;
+                        let res = grpc.unary(method, req).await;
                         Ok(res)
                     };
                     Box::pin(fut)
                 }
-                "/disfuser.disfuser/write" => {
+                "/disfuser.KeeperWork/write" => {
                     #[allow(non_camel_case_types)]
-                    struct writeSvc<T: Disfuser>(pub Arc<T>);
-                    impl<T: Disfuser> tonic::server::ClientStreamingService<super::Write> for writeSvc<T> {
+                    struct writeSvc<T: KeeperWork>(pub Arc<T>);
+                    impl<T: KeeperWork> tonic::server::UnaryService<super::Write> for writeSvc<T> {
                         type Response = super::ReplyWrite;
                         type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<tonic::Streaming<super::Write>>,
-                        ) -> Self::Future {
+                        fn call(&mut self, request: tonic::Request<super::Write>) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move { (*inner).write(request).await };
                             Box::pin(fut)
@@ -460,19 +449,17 @@ pub mod disfuser_server {
                             accept_compression_encodings,
                             send_compression_encodings,
                         );
-                        let res = grpc.client_streaming(method, req).await;
+                        let res = grpc.unary(method, req).await;
                         Ok(res)
                     };
                     Box::pin(fut)
                 }
-                "/disfuser.disfuser/lookup" => {
+                "/disfuser.KeeperWork/lookup" => {
                     #[allow(non_camel_case_types)]
-                    struct lookupSvc<T: Disfuser>(pub Arc<T>);
-                    impl<T: Disfuser> tonic::server::ServerStreamingService<super::LookUp> for lookupSvc<T> {
+                    struct lookupSvc<T: KeeperWork>(pub Arc<T>);
+                    impl<T: KeeperWork> tonic::server::UnaryService<super::LookUp> for lookupSvc<T> {
                         type Response = super::Reply;
-                        type ResponseStream = T::lookupStream;
-                        type Future =
-                            BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(&mut self, request: tonic::Request<super::LookUp>) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move { (*inner).lookup(request).await };
@@ -490,16 +477,16 @@ pub mod disfuser_server {
                             accept_compression_encodings,
                             send_compression_encodings,
                         );
-                        let res = grpc.server_streaming(method, req).await;
+                        let res = grpc.unary(method, req).await;
                         Ok(res)
                     };
                     Box::pin(fut)
                 }
-                "/disfuser.disfuser/create" => {
+                "/disfuser.KeeperWork/create" => {
                     #[allow(non_camel_case_types)]
-                    struct createSvc<T: Disfuser>(pub Arc<T>);
-                    impl<T: Disfuser> tonic::server::UnaryService<super::Create> for createSvc<T> {
-                        type Response = super::CreateRply;
+                    struct createSvc<T: KeeperWork>(pub Arc<T>);
+                    impl<T: KeeperWork> tonic::server::UnaryService<super::Create> for createSvc<T> {
+                        type Response = super::Bool;
                         type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(&mut self, request: tonic::Request<super::Create>) -> Self::Future {
                             let inner = self.0.clone();
@@ -523,10 +510,10 @@ pub mod disfuser_server {
                     };
                     Box::pin(fut)
                 }
-                "/disfuser.disfuser/unlink" => {
+                "/disfuser.KeeperWork/unlink" => {
                     #[allow(non_camel_case_types)]
-                    struct unlinkSvc<T: Disfuser>(pub Arc<T>);
-                    impl<T: Disfuser> tonic::server::UnaryService<super::Unlink> for unlinkSvc<T> {
+                    struct unlinkSvc<T: KeeperWork>(pub Arc<T>);
+                    impl<T: KeeperWork> tonic::server::UnaryService<super::Unlink> for unlinkSvc<T> {
                         type Response = super::Bool;
                         type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(&mut self, request: tonic::Request<super::Unlink>) -> Self::Future {
@@ -562,7 +549,7 @@ pub mod disfuser_server {
             }
         }
     }
-    impl<T: Disfuser> Clone for DisfuserServer<T> {
+    impl<T: KeeperWork> Clone for KeeperWorkServer<T> {
         fn clone(&self) -> Self {
             let inner = self.inner.clone();
             Self {
@@ -572,7 +559,7 @@ pub mod disfuser_server {
             }
         }
     }
-    impl<T: Disfuser> Clone for _Inner<T> {
+    impl<T: KeeperWork> Clone for _Inner<T> {
         fn clone(&self) -> Self {
             Self(self.0.clone())
         }
@@ -582,7 +569,7 @@ pub mod disfuser_server {
             write!(f, "{:?}", self.0)
         }
     }
-    impl<T: Disfuser> tonic::transport::NamedService for DisfuserServer<T> {
-        const NAME: &'static str = "disfuser.disfuser";
+    impl<T: KeeperWork> tonic::transport::NamedService for KeeperWorkServer<T> {
+        const NAME: &'static str = "disfuser.KeeperWork";
     }
 }

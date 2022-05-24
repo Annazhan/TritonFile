@@ -155,10 +155,10 @@ impl Filesystem for Front {
                             reply.entry(&Duration::new(0, 0), &attrs, 0);
                         }
                     }
-                    Err(e) => Err(e),
+                    Err(e) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => Err(e),
+            Err(e) => reply.error(libc::ENETDOWN),
         }
     }
 
@@ -195,10 +195,10 @@ impl Filesystem for Front {
                             reply.data(&data)
                         }
                     }
-                    Err(e) => Err(e),
+                    Err(_) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => Err(e),
+            Err(_) => reply.error(libc::ENETDOWN),
         }
     }
 
@@ -243,10 +243,10 @@ impl Filesystem for Front {
                             reply.written(written)
                         }
                     }
-                    Err(e) => Err(e),
+                    Err(e) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => Err(e),
+            Err(e) => reply.error(libc::ENETDOWN),
         }
     }
 
@@ -278,13 +278,13 @@ impl Filesystem for Front {
                             reply.error(error_code);
                         } else {
                             let (attr, fh) = attrs_fh_op.unwrap();
-                            reply.created(&Duration::new(0, 0), &attrs.into(), 0, fh, 0)
+                            reply.created(&Duration::new(0, 0), &attr, 0, fh, 0)
                         }
                     }
-                    Err(e) => Err(e),
+                    Err(e) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => Err(e),
+            Err(e) => reply.error(libc::ENETDOWN),
         }
     }
 
@@ -308,10 +308,10 @@ impl Filesystem for Front {
                             reply.ok();
                         }
                     }
-                    Err(e) => Err(e),
+                    Err(e) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => Err(e),
+            Err(e) => reply.error(libc::ENETDOWN),
         }
     }
 }

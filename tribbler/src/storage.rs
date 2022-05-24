@@ -26,12 +26,12 @@ use crate::error;
 use crate::error::TritonFileError;
 use crate::error::TritonFileResult;
 use crate::simple;
-use crate::simple::FileKind;
-use crate::simple::InodeAttributes;
-use crate::simple::SimpleFS;
 use crate::simple::check_access;
 use crate::simple::clear_suid_sgid;
 use crate::simple::time_now;
+use crate::simple::FileKind;
+use crate::simple::InodeAttributes;
+use crate::simple::SimpleFS;
 
 use fuser::{BackgroundSession, FileAttr, MountOption, Request};
 
@@ -141,7 +141,8 @@ pub trait ServerFileSystem {
         name: &OsStr,
     ) -> TritonFileResult<(Option<FileAttr>, c_int)>;
 
-    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<c_int>;
+    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr)
+        -> TritonFileResult<c_int>;
 
     async fn create(
         &mut self,
@@ -178,7 +179,6 @@ pub struct RemoteFileSystem {
     fs: SimpleFS,
 }
 
-
 impl RemoteFileSystem {
     /// Creates a new instance of [MemStorage]
     pub fn new(num: u32) -> RemoteFileSystem {
@@ -197,11 +197,11 @@ impl RemoteFileSystem {
             fs::create_dir(format!("tmp/{}", num)).unwrap();
         }
 
-        RemoteFileSystem { 
-            kvs: RwLock::new(HashMap::new()), 
-            kv_list: RwLock::new(HashMap::new()), 
-            clock: RwLock::new(0), 
-            fs: SimpleFS::new(format!("tmp/{}", num), false,false),
+        RemoteFileSystem {
+            kvs: RwLock::new(HashMap::new()),
+            kv_list: RwLock::new(HashMap::new()),
+            clock: RwLock::new(0),
+            fs: SimpleFS::new(format!("tmp/{}", num), false, false),
         }
     }
 }
@@ -310,7 +310,7 @@ impl ServerFileSystem for RemoteFileSystem {
         size: u32,
         _flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<(Option<String>, c_int)>{
+    ) -> TritonFileResult<(Option<String>, c_int)> {
         let fs = &self.fs;
         info!(
             "read() called on {:?} offset={:?} size={:?}",
@@ -329,7 +329,10 @@ impl ServerFileSystem for RemoteFileSystem {
 
             let mut buffer = vec![0; read_size as usize];
             file.read_exact_at(&mut buffer, offset as u64).unwrap();
-            return Ok((Some(serde_json::to_string(&buffer).unwrap()), error::SUCCESS));
+            return Ok((
+                Some(serde_json::to_string(&buffer).unwrap()),
+                error::SUCCESS,
+            ));
         } else {
             return Ok((None, libc::ENOENT));
         }
@@ -345,7 +348,7 @@ impl ServerFileSystem for RemoteFileSystem {
         _write_flags: u32,
         #[allow(unused_variables)] flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<(Option<u32>, c_int)>{
+    ) -> TritonFileResult<(Option<u32>, c_int)> {
         let fs = &self.fs;
 
         info!("write() called with {:?} size={:?}", inode, data.len());
@@ -374,7 +377,7 @@ impl ServerFileSystem for RemoteFileSystem {
             clear_suid_sgid(&mut attrs);
             fs.write_inode(&attrs);
 
-            return Ok((Some(data.len() as u32) , error::SUCCESS));
+            return Ok((Some(data.len() as u32), error::SUCCESS));
         } else {
             return Ok((None, libc::EBADF));
         }
@@ -385,10 +388,12 @@ impl ServerFileSystem for RemoteFileSystem {
         req: &Request,
         parent: u64,
         name: &OsStr,
-    ) -> TritonFileResult<(Option<FileAttr>, c_int)>{
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
         let fs = &self.fs;
         if name.len() > simple::MAX_NAME_LENGTH as usize {
-            return Err(Box::new(TritonFileError::UserInterfaceError(libc::ENAMETOOLONG)));
+            return Err(Box::new(TritonFileError::UserInterfaceError(
+                libc::ENAMETOOLONG,
+            )));
         }
         let parent_attrs = fs.get_inode(parent).unwrap();
         if !check_access(
@@ -408,7 +413,12 @@ impl ServerFileSystem for RemoteFileSystem {
         }
     }
 
-    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<c_int>{
+    async fn unlink(
+        &mut self,
+        req: &Request,
+        parent: u64,
+        name: &OsStr,
+    ) -> TritonFileResult<c_int> {
         let fs = &self.fs;
 
         info!("unlink() called with {:?} {:?}", parent, name);
@@ -471,7 +481,7 @@ impl ServerFileSystem for RemoteFileSystem {
         mut mode: u32,
         _umask: u32,
         flags: i32,
-    ) -> TritonFileResult<(Option<(FileAttr, u64)>, c_int)>{
+    ) -> TritonFileResult<(Option<(FileAttr, u64)>, c_int)> {
         let fs = &self.fs;
         info!("create() called with {:?} {:?}", parent, name);
         if fs.lookup_name(parent, name).is_ok() {
@@ -544,7 +554,10 @@ impl ServerFileSystem for RemoteFileSystem {
 
         // TODO: implement flags
 
-        Ok((Some((attrs.into(), fs.allocate_next_file_handle(read, write))), error::SUCCESS))
+        Ok((
+            Some((attrs.into(), fs.allocate_next_file_handle(read, write))),
+            error::SUCCESS,
+        ))
     }
 }
 
@@ -574,18 +587,11 @@ pub trait BinStorage: Send + Sync {
 
 #[cfg(test)]
 mod test {
-    use std::{process::Command, fs, path::{self, Path}};
+    use std::fs;
 
-    use fuser::MountOption;
-    use log::info;
-    use path_absolutize::Absolutize;
+    use crate::error::TritonFileResult;
 
-    use crate::{
-        error::TritonFileResult,
-        storage::{KeyValue, Pattern, Storage}, simple::SimpleFS,
-    };
-
-    use super::{KeyList, KeyString, RemoteFileSystem};
+    use super::{KeyList, KeyString, KeyValue, RemoteFileSystem};
 
     async fn setup_test_storage() -> RemoteFileSystem {
         let storage = RemoteFileSystem::new(1);
@@ -607,34 +613,13 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_create_dir() -> TritonFileResult<()>{
+    async fn test_create_dir() -> TritonFileResult<()> {
         if !fs::metadata(format!("tmp/{}", 2)).is_ok() {
             println!("The directory is not found");
             fs::create_dir_all(format!("tmp/{}", 2))?;
         }
         Ok(())
     }
-
-    #[tokio::test]
-    async fn test_new_filesystem() -> TritonFileResult<()>{
-        let mut options = vec![MountOption::FSName(format!("fuser{}", 2))];
-        #[cfg(feature = "abi-7-26")]
-        {
-            options.push(MountOption::AutoUnmount);
-        }
-        #[cfg(not(feature = "abi-7-26"))]
-        {
-            options.push(MountOption::AutoUnmount);
-            options.push(MountOption::AllowOther);
-        }
-        let result = fuser::spawn_mount2(
-            SimpleFS::new("/tmp/fuser".to_string(), false, false),
-            format!("/tmp/mount_point/{}", 2),
-            &options,
-        );
-        Ok(())
-    }
-
 
     // #[tokio::test]
     // async fn storage_get_empty() -> TritonFileResult<()> {
@@ -643,137 +628,137 @@ mod test {
     //     Ok(())
     // }
 
-//     #[tokio::test]
-//     async fn storage_keys() {
-//         let storage = setup_test_storage().await;
-//         let p1 = Pattern {
-//             prefix: "test".to_string(),
-//             suffix: "test".to_string(),
-//         };
-//         let p2 = Pattern {
-//             prefix: "".to_string(),
-//             suffix: "test".to_string(),
-//         };
-//         let p3 = Pattern {
-//             prefix: "test".to_string(),
-//             suffix: "".to_string(),
-//         };
-//         let p4 = Pattern {
-//             prefix: "wrong".to_string(),
-//             suffix: "right".to_string(),
-//         };
-//         let p5 = Pattern {
-//             prefix: "".to_string(),
-//             suffix: "".to_string(),
-//         };
-//         assert_eq!(1, storage.keys(&p1).await.unwrap().0.len());
-//         assert_eq!(1, storage.keys(&p2).await.unwrap().0.len());
-//         assert_eq!(1, storage.keys(&p3).await.unwrap().0.len());
-//         assert_eq!(0, storage.keys(&p4).await.unwrap().0.len());
-//         assert_eq!(1, storage.keys(&p5).await.unwrap().0.len());
-//     }
+    //     #[tokio::test]
+    //     async fn storage_keys() {
+    //         let storage = setup_test_storage().await;
+    //         let p1 = Pattern {
+    //             prefix: "test".to_string(),
+    //             suffix: "test".to_string(),
+    //         };
+    //         let p2 = Pattern {
+    //             prefix: "".to_string(),
+    //             suffix: "test".to_string(),
+    //         };
+    //         let p3 = Pattern {
+    //             prefix: "test".to_string(),
+    //             suffix: "".to_string(),
+    //         };
+    //         let p4 = Pattern {
+    //             prefix: "wrong".to_string(),
+    //             suffix: "right".to_string(),
+    //         };
+    //         let p5 = Pattern {
+    //             prefix: "".to_string(),
+    //             suffix: "".to_string(),
+    //         };
+    //         assert_eq!(1, storage.keys(&p1).await.unwrap().0.len());
+    //         assert_eq!(1, storage.keys(&p2).await.unwrap().0.len());
+    //         assert_eq!(1, storage.keys(&p3).await.unwrap().0.len());
+    //         assert_eq!(0, storage.keys(&p4).await.unwrap().0.len());
+    //         assert_eq!(1, storage.keys(&p5).await.unwrap().0.len());
+    //     }
 
-//     #[tokio::test]
-//     async fn storage_keys_unset() {
-//         let s = setup_test_storage().await;
-//         assert_eq!(1, s.keys(&Pattern::default()).await.unwrap().0.len());
-//         let _ = s.set(&KeyValue::new("test", "")).await.unwrap();
-//         assert_eq!(0, s.keys(&Pattern::default()).await.unwrap().0.len())
-//     }
+    //     #[tokio::test]
+    //     async fn storage_keys_unset() {
+    //         let s = setup_test_storage().await;
+    //         assert_eq!(1, s.keys(&Pattern::default()).await.unwrap().0.len());
+    //         let _ = s.set(&KeyValue::new("test", "")).await.unwrap();
+    //         assert_eq!(0, s.keys(&Pattern::default()).await.unwrap().0.len())
+    //     }
 
-//     #[tokio::test]
-//     async fn storage_list_keys_unset() {
-//         let s = setup_test_storage().await;
-//         assert_eq!(1, s.list_keys(&Pattern::default()).await.unwrap().0.len());
-//         let _ = s
-//             .list_remove(&KeyValue::new("test", "test-value"))
-//             .await
-//             .unwrap();
-//         assert_eq!(0, s.list_keys(&Pattern::default()).await.unwrap().0.len())
-//     }
+    //     #[tokio::test]
+    //     async fn storage_list_keys_unset() {
+    //         let s = setup_test_storage().await;
+    //         assert_eq!(1, s.list_keys(&Pattern::default()).await.unwrap().0.len());
+    //         let _ = s
+    //             .list_remove(&KeyValue::new("test", "test-value"))
+    //             .await
+    //             .unwrap();
+    //         assert_eq!(0, s.list_keys(&Pattern::default()).await.unwrap().0.len())
+    //     }
 
-//     #[tokio::test]
-//     async fn storage_get_list() {
-//         let storage = setup_test_storage().await;
-//         assert_eq!("test-value", storage.list_get("test").await.unwrap().0[0]);
-//     }
+    //     #[tokio::test]
+    //     async fn storage_get_list() {
+    //         let storage = setup_test_storage().await;
+    //         assert_eq!("test-value", storage.list_get("test").await.unwrap().0[0]);
+    //     }
 
-//     #[tokio::test]
-//     async fn storage_get_list_empty() {
-//         let storage = setup_test_storage().await;
-//         assert_eq!(0, storage.list_get("test2").await.unwrap().0.len());
-//     }
+    //     #[tokio::test]
+    //     async fn storage_get_list_empty() {
+    //         let storage = setup_test_storage().await;
+    //         assert_eq!(0, storage.list_get("test2").await.unwrap().0.len());
+    //     }
 
-//     #[tokio::test]
-//     async fn storage_get_list_append() -> TritonFileResult<()> {
-//         let storage = setup_test_storage().await;
-//         let res = storage
-//             .list_append(&KeyValue {
-//                 key: "test".to_string(),
-//                 value: "val2".to_string(),
-//             })
-//             .await?;
-//         assert_eq!(true, res);
-//         assert_eq!(2, storage.list_get("test").await.unwrap().0.len());
-//         Ok(())
-//     }
+    //     #[tokio::test]
+    //     async fn storage_get_list_append() -> TritonFileResult<()> {
+    //         let storage = setup_test_storage().await;
+    //         let res = storage
+    //             .list_append(&KeyValue {
+    //                 key: "test".to_string(),
+    //                 value: "val2".to_string(),
+    //             })
+    //             .await?;
+    //         assert_eq!(true, res);
+    //         assert_eq!(2, storage.list_get("test").await.unwrap().0.len());
+    //         Ok(())
+    //     }
 
-//     #[tokio::test]
-//     async fn storage_get_list_remove() {
-//         let storage = setup_test_storage().await;
-//         let kv = KeyValue {
-//             key: "test".to_string(),
-//             value: "val2".to_string(),
-//         };
-//         assert_eq!(true, storage.list_append(&kv).await.unwrap());
-//         assert_eq!(true, storage.list_append(&kv).await.unwrap());
-//         assert_eq!(true, storage.list_append(&kv).await.unwrap());
-//         assert_eq!(3, storage.list_remove(&kv).await.unwrap());
-//         println!("{:?}", storage.list_get("test").await.unwrap().0);
-//         assert_eq!("test-value", storage.list_get("test").await.unwrap().0[0]);
-//     }
+    //     #[tokio::test]
+    //     async fn storage_get_list_remove() {
+    //         let storage = setup_test_storage().await;
+    //         let kv = KeyValue {
+    //             key: "test".to_string(),
+    //             value: "val2".to_string(),
+    //         };
+    //         assert_eq!(true, storage.list_append(&kv).await.unwrap());
+    //         assert_eq!(true, storage.list_append(&kv).await.unwrap());
+    //         assert_eq!(true, storage.list_append(&kv).await.unwrap());
+    //         assert_eq!(3, storage.list_remove(&kv).await.unwrap());
+    //         println!("{:?}", storage.list_get("test").await.unwrap().0);
+    //         assert_eq!("test-value", storage.list_get("test").await.unwrap().0[0]);
+    //     }
 
-//     #[tokio::test]
-//     async fn storage_list_keys() {
-//         let storage = setup_test_storage().await;
-//         let p1 = Pattern {
-//             prefix: "test".to_string(),
-//             suffix: "test".to_string(),
-//         };
-//         let p2 = Pattern {
-//             prefix: "".to_string(),
-//             suffix: "test".to_string(),
-//         };
-//         let p3 = Pattern {
-//             prefix: "test".to_string(),
-//             suffix: "".to_string(),
-//         };
-//         let p4 = Pattern {
-//             prefix: "wrong".to_string(),
-//             suffix: "right".to_string(),
-//         };
-//         let p5 = Pattern {
-//             prefix: "".to_string(),
-//             suffix: "".to_string(),
-//         };
-//         assert_eq!(1, storage.list_keys(&p1).await.unwrap().0.len());
-//         assert_eq!(1, storage.list_keys(&p2).await.unwrap().0.len());
-//         assert_eq!(1, storage.list_keys(&p3).await.unwrap().0.len());
-//         assert_eq!(0, storage.list_keys(&p4).await.unwrap().0.len());
-//         assert_eq!(1, storage.list_keys(&p5).await.unwrap().0.len());
-//     }
+    //     #[tokio::test]
+    //     async fn storage_list_keys() {
+    //         let storage = setup_test_storage().await;
+    //         let p1 = Pattern {
+    //             prefix: "test".to_string(),
+    //             suffix: "test".to_string(),
+    //         };
+    //         let p2 = Pattern {
+    //             prefix: "".to_string(),
+    //             suffix: "test".to_string(),
+    //         };
+    //         let p3 = Pattern {
+    //             prefix: "test".to_string(),
+    //             suffix: "".to_string(),
+    //         };
+    //         let p4 = Pattern {
+    //             prefix: "wrong".to_string(),
+    //             suffix: "right".to_string(),
+    //         };
+    //         let p5 = Pattern {
+    //             prefix: "".to_string(),
+    //             suffix: "".to_string(),
+    //         };
+    //         assert_eq!(1, storage.list_keys(&p1).await.unwrap().0.len());
+    //         assert_eq!(1, storage.list_keys(&p2).await.unwrap().0.len());
+    //         assert_eq!(1, storage.list_keys(&p3).await.unwrap().0.len());
+    //         assert_eq!(0, storage.list_keys(&p4).await.unwrap().0.len());
+    //         assert_eq!(1, storage.list_keys(&p5).await.unwrap().0.len());
+    //     }
 
-//     #[tokio::test]
-//     async fn clock_at_least() {
-//         let storage = setup_test_storage().await;
-//         assert_eq!(1234, storage.clock(1234).await.unwrap());
-//     }
+    //     #[tokio::test]
+    //     async fn clock_at_least() {
+    //         let storage = setup_test_storage().await;
+    //         assert_eq!(1234, storage.clock(1234).await.unwrap());
+    //     }
 
-//     #[tokio::test]
-//     async fn clock_ge() {
-//         let storage = setup_test_storage().await;
-//         let c1 = storage.clock(1234).await.unwrap();
-//         let c2 = storage.clock(0).await.unwrap();
-//         assert_eq!(true, c2 > c1);
-//     }
+    //     #[tokio::test]
+    //     async fn clock_ge() {
+    //         let storage = setup_test_storage().await;
+    //         let c1 = storage.clock(1234).await.unwrap();
+    //         let c2 = storage.clock(0).await.unwrap();
+    //         assert_eq!(true, c2 > c1);
+    //     }
 }
