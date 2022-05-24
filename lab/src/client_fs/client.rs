@@ -31,8 +31,9 @@ impl StorageClient {
     }
 }
 
+// convert the write into a write stream 
 fn write_requests_iter(
-    _req: &Request,
+    _req: &FileRequest,
     inode: u64,
     fh: u64,
     offset: i64,
@@ -41,9 +42,15 @@ fn write_requests_iter(
     #[allow(unused_variables)] flags: i32,
     _lock_owner: Option<u64>, 
 ) -> impl Stream<Item = Write> {
+    let FReq = disfuser::FRequest{
+        uid: _req.uid,
+        gid: _req.gid,
+        pid: _req.pid,
+    };
+
     let data_string = serde_json::to_string(data); 
     let data_len = data_string.len();
-
+    
     let mut n = data_len/slice_size; 
     if data_len % slice_size!=0{
         n += 1; 
@@ -57,7 +64,7 @@ fn write_requests_iter(
         start = i * slice_size; 
         end = min(start + slice_size, data_len);
         let element = disfuser::Write{
-            _req, 
+            FReq, 
             inode,
             fh,
             offset,
@@ -75,7 +82,7 @@ fn write_requests_iter(
 impl ServerFileSystem for StorageClient{
     async fn read(
         &self,
-        _req: &Request,
+        _req: &FileRequest,
         inode: u64,
         fh: u64,
         offset: i64,
@@ -83,14 +90,11 @@ impl ServerFileSystem for StorageClient{
         _flags: i32,
         _lock_owner: Option<u64>,
     ) -> TritonFileResult<(Option<String>, c_int)>{
-        // client return string 
-        // binstore return string  
-        // front: string -> vec[u8]
         let mut client = self.client().await;
         let FReq = disfuser::FRequest{
-            uid: _req.uid(),
-            gid: _req.gid(),
-            pid: _req.pid(),
+            uid: _req.uid,
+            gid: _req.gid,
+            pid: _req.pid,
         };
 
         let stream = client
@@ -121,7 +125,7 @@ impl ServerFileSystem for StorageClient{
 
     async fn write(
         &mut self,
-        _req: &Request,
+        _req: &FileRequest,
         inode: u64,
         fh: u64,
         offset: i64,
@@ -130,11 +134,16 @@ impl ServerFileSystem for StorageClient{
         #[allow(unused_variables)] flags: i32,
         _lock_owner: Option<u64>,
     ) -> TritonFileResult<(Option<u32>, c_int)>{
+        let FReq = disfuser::FRequest{
+            uid: _req.uid,
+            gid: _req.gid,
+            pid: _req.pid,
+        };
+
         let mut client = self.client().await;
-        
-        // write stream
+                
         let in_stream = write_requests_iter(
-            _req, 
+            FReq, 
             inode,
             fh,
             offset,
@@ -157,14 +166,20 @@ impl ServerFileSystem for StorageClient{
 
     async fn lookup(
         &mut self,
-        req: &Request,
+        req: &FileRequest,
         parent: u64,
         name: &OsStr,
     ) -> TritonFileResult<(Option<FileAttr>, c_int)>{
+        let FReq = disfuser::FRequest{
+            uid: req.uid,
+            gid: req.gid,
+            pid: req.pid,
+        };
+
         let mut client = self.client().await;
         let result = client
             .lookup(disfuser::LookUp {
-                req, 
+                Freq, 
                 parent,
                 name
             })
@@ -180,17 +195,23 @@ impl ServerFileSystem for StorageClient{
 
     async fn create(
         &mut self,
-        req: &Request,
+        req: &FileRequest,
         parent: u64,
         name: &OsStr,
         mut mode: u32,
         _umask: u32,
         flags: i32,
     ) -> TritonFileResult<(Option<(FileAttr, u64)>, c_int)>{
+        let FReq = disfuser::FRequest{
+            uid: req.uid,
+            gid: req.gid,
+            pid: req.pid,
+        };
+
         let mut client = self.client().await;
         let result = client
             .create(disfuser::Create {
-                req,
+                FReq,
                 parent,
                 name,
                 mode,
@@ -213,11 +234,17 @@ impl ServerFileSystem for StorageClient{
         // Ok((attr, fh))
     }
 
-    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<c_int>{
+    async fn unlink(&mut self, req: &FileRequest, parent: u64, name: &OsStr) -> TritonFileResult<c_int>{
+        let FReq = disfuser::FRequest{
+            uid: req.uid,
+            gid: req.gid,
+            pid: req.pid,
+        };
+
         let mut client = self.client().await;
         let result = client
             .unlink(disfuser::Unlink {
-                req,
+                FReq,
                 parent, 
                 name
             })
@@ -331,4 +358,4 @@ impl Storage for StorageClient {
             .await?;
         Ok(result.into_inner().timestamp)
     }
-}
+} 

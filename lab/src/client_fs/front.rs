@@ -33,6 +33,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, fs, io};
+use tribbler::storage::FileRequest;
 
 use async_trait::async_trait;
 use log::info;
@@ -141,7 +142,12 @@ impl Filesystem for Front {
 
         match bin_res {
             Ok(mut bin) => {
-                let bin_lookup_pre = bin.lookup(req, parent, name);
+                let FReq = &FileRequest {
+                    uid: req.uid(),
+                    gid: req.gid(),
+                    pid: req.pid(),
+                };
+                let bin_lookup_pre = bin.lookup(FReq, parent, name);
 
                 let res = self.runtime.block_on(bin_lookup_pre);
 
@@ -180,7 +186,12 @@ impl Filesystem for Front {
 
         match bin_res {
             Ok(bin) => {
-                let bin_read_pre = bin.read(_req, inode, fh, offset, size, _flags, _lock_owner);
+                let FReq = &FileRequest {
+                    uid: _req.uid(),
+                    gid: _req.gid(),
+                    pid: _req.pid(),
+                };
+                let bin_read_pre = bin.read(FReq, inode, fh, offset, size, _flags, _lock_owner);
 
                 let res = self.runtime.block_on(bin_read_pre);
 
@@ -215,6 +226,11 @@ impl Filesystem for Front {
         reply: ReplyWrite,
     ) {
         // ReliableStore
+        let FReq = &FileRequest {
+            uid: _req.uid(),
+            gid: _req.gid(),
+            pid: _req.pid(),
+        };
         let uid = _req.uid().to_string().clone();
         let bin_pre = self.binstore.bin(uid.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
@@ -222,7 +238,7 @@ impl Filesystem for Front {
         match bin_res {
             Ok(mut bin) => {
                 let bin_write_pre = bin.write(
-                    _req,
+                    FReq,
                     inode,
                     fh,
                     offset,
@@ -261,13 +277,18 @@ impl Filesystem for Front {
         reply: ReplyCreate,
     ) {
         // ReliableStore
+        let FReq = &FileRequest {
+            uid: req.uid(),
+            gid: req.gid(),
+            pid: req.pid(),
+        };
         let uid = req.uid().to_string().clone();
         let bin_pre = self.binstore.bin(uid.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
             Ok(mut bin) => {
-                let bin_create_pre = bin.create(req, parent, name, mode, _umask, flags);
+                let bin_create_pre = bin.create(FReq, parent, name, mode, _umask, flags);
 
                 let res = self.runtime.block_on(bin_create_pre);
 
@@ -290,13 +311,18 @@ impl Filesystem for Front {
 
     fn unlink(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: ReplyEmpty) {
         // ReliableStore
+        let FReq = &FileRequest {
+            uid: _req.uid(),
+            gid: _req.gid(),
+            pid: _req.pid(),
+        };
         let uid = _req.uid().to_string().clone();
         let bin_pre = self.binstore.bin(uid.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
             Ok(mut bin) => {
-                let bin_unlink_pre = bin.unlink(_req, parent, name);
+                let bin_unlink_pre = bin.unlink(FReq, parent, name);
 
                 let res = self.runtime.block_on(bin_unlink_pre);
 
