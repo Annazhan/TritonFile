@@ -128,13 +128,17 @@ impl Disfuser for DisfuserServer {
         let mut in_stream = request.into_inner();
 
         let mut r_data: Vec<String> = Vec::new();
-        let mut file_request: FileRequest;
-        let mut inode: u64;
-        let mut file_handler: u64;
-        let mut offset: i64;
-        let mut _write_flags: u32;
-        let mut flags: i32;
-        let mut _lock_owner: Option<u64>;
+        let mut file_request: FileRequest = FileRequest {
+            uid: 0,
+            gid: 0,
+            pid: 0,
+        };
+        let mut inode: u64 = 0;
+        let mut file_handler: u64 = 0;
+        let mut offset: i64 = 0;
+        let mut _write_flags: u32 = 0;
+        let mut flags: i32 = 0;
+        let mut _lock_owner: Option<u64> = Some(0);
         // let mut stream = in_stream.take(0);
         while let item = in_stream.next().await {
             match item {
@@ -194,24 +198,19 @@ impl Disfuser for DisfuserServer {
         };
         let mut osstring = OsString::new();
         osstring.push(request_inner.name);
-        // let mut name = serde_json::from_str::<&[u8]>(&request_inner.name).unwrap();
-        // let ostr = OsStr {
-        //     inner: Slice { inner: *name },
-        // };
         let result = self
             .filesystem
             .lookup(&file_request, request_inner.parent, &osstring.as_os_str())
             .await;
 
-        // match result {
-        //     Ok(value) => Ok(Response::new(Reply {
-        //         message: serde_json::to_string_pretty(&value.0.unwrap()).unwrap(),
-        //         // message: ron::ser::to_string(&value.0.unwrap()),
-        //         errcode: value.1,
-        //     })),
-        //     Err(_) => Err(Status::invalid_argument("lookup failed")),
-        // }
-        todo!()
+        match result {
+            Ok(value) => Ok(Response::new(Reply {
+                message: serde_json::to_string(&value.0.unwrap()).unwrap(),
+                // message: ron::ser::to_string(&value.0.unwrap()),
+                errcode: value.1,
+            })),
+            Err(_) => Err(Status::invalid_argument("lookup failed")),
+        }
     }
 
     async fn create(
@@ -219,7 +218,32 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<Create>,
     ) -> Result<tonic::Response<CreateReply>, tonic::Status> {
         let request_inner = request.into_inner();
-        todo!()
+        let mut file_request = FileRequest {
+            uid: request_inner.frequest.clone().unwrap().uid,
+            gid: request_inner.frequest.clone().unwrap().gid,
+            pid: request_inner.frequest.clone().unwrap().pid,
+        };
+        let mut osstring = OsString::new();
+        osstring.push(request_inner.name);
+        let result = self
+            .filesystem
+            .create(
+                &file_request,
+                request_inner.parent,
+                &osstring.as_os_str(),
+                request_inner.mode,
+                request_inner.umask,
+                request_inner.flags,
+            )
+            .await;
+        match result {
+            Ok(value) => Ok(Response::new(CreateReply {
+                file_attr: serde_json::to_string(&value.0.clone().unwrap().0).unwrap(),
+                fh: value.0.clone().unwrap().1,
+                errcode: value.1,
+            })),
+            Err(_) => Err(Status::invalid_argument("create failed")),
+        }
     }
 
     async fn unlink(
@@ -227,6 +251,21 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<Unlink>,
     ) -> Result<tonic::Response<UnlinkReply>, tonic::Status> {
         let request_inner = request.into_inner();
-        todo!()
+        let mut file_request = FileRequest {
+            uid: request_inner.frequest.clone().unwrap().uid,
+            gid: request_inner.frequest.clone().unwrap().gid,
+            pid: request_inner.frequest.clone().unwrap().pid,
+        };
+        let mut osstring = OsString::new();
+        osstring.push(request_inner.name);
+        let result = self
+            .filesystem
+            .unlink(&file_request, request_inner.parent, &osstring.as_os_str())
+            .await;
+
+        match result {
+            Ok(value) => Ok(Response::new(UnlinkReply { errcode: value })),
+            Err(_) => Err(Status::invalid_argument("unlink failed")),
+        }
     }
 }
