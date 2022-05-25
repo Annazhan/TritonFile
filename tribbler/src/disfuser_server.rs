@@ -1,4 +1,4 @@
-use crate::disfuser::disfuser_server::Disfuser;
+use crate::disfuser::disfuser_server::{self, Disfuser};
 use crate::disfuser::{
     Create, CreateReply, LookUp, Read, Reply, Unlink, UnlinkReply, Write, WriteReply,
 };
@@ -65,9 +65,9 @@ impl Disfuser for DisfuserServer {
         let r_inner = request.into_inner();
 
         let request = FileRequest {
-            uid: r_inner.frequest.unwrap().uid,
-            gid: r_inner.frequest.unwrap().gid,
-            pid: r_inner.frequest.unwrap().pid,
+            uid: r_inner.frequest.clone().unwrap().uid,
+            gid: r_inner.frequest.clone().unwrap().gid,
+            pid: r_inner.frequest.clone().unwrap().pid,
         };
 
         let result = self
@@ -82,8 +82,7 @@ impl Disfuser for DisfuserServer {
                 Some(r_inner.lock_owner),
             )
             .await;
-
-        let reply;
+        let mut reply = Vec::new();
         match result {
             Ok(value) => {
                 if value.1 > 0 {
@@ -143,9 +142,9 @@ impl Disfuser for DisfuserServer {
                     let v = value.unwrap();
                     r_data.push(v.data);
                     file_request = FileRequest {
-                        uid: v.frequest.unwrap().uid,
-                        gid: v.frequest.unwrap().gid,
-                        pid: v.frequest.unwrap().pid,
+                        uid: v.frequest.clone().unwrap().uid,
+                        gid: v.frequest.clone().unwrap().gid,
+                        pid: v.frequest.clone().unwrap().pid,
                     };
                     inode = v.ino;
                     file_handler = v.fh;
@@ -187,13 +186,13 @@ impl Disfuser for DisfuserServer {
         &self,
         request: tonic::Request<LookUp>,
     ) -> Result<tonic::Response<Reply>, tonic::Status> {
-        let request_inner = request.into_inner();
+        let mut request_inner = request.into_inner();
         let mut file_request = FileRequest {
-            uid: request_inner.frequest.unwrap().uid,
-            gid: request_inner.frequest.unwrap().gid,
-            pid: request_inner.frequest.unwrap().pid,
+            uid: request_inner.frequest.clone().unwrap().uid,
+            gid: request_inner.frequest.clone().unwrap().gid,
+            pid: request_inner.frequest.clone().unwrap().pid,
         };
-        let osstring = OsString::new();
+        let mut osstring = OsString::new();
         osstring.push(request_inner.name);
         // let mut name = serde_json::from_str::<&[u8]>(&request_inner.name).unwrap();
         // let ostr = OsStr {
@@ -204,14 +203,15 @@ impl Disfuser for DisfuserServer {
             .lookup(&file_request, request_inner.parent, &osstring.as_os_str())
             .await;
 
-        match result {
-            Ok(value) => Ok(Response::new(Reply {
-                message: serde_json::to_string_pretty(&value.0.unwrap()).unwrap(),
-                // message: ron::ser::to_string(&value.0.unwrap()),
-                errcode: value.1,
-            })),
-            Err(_) => Err(Status::invalid_argument("lookup failed")),
-        }
+        // match result {
+        //     Ok(value) => Ok(Response::new(Reply {
+        //         message: serde_json::to_string_pretty(&value.0.unwrap()).unwrap(),
+        //         // message: ron::ser::to_string(&value.0.unwrap()),
+        //         errcode: value.1,
+        //     })),
+        //     Err(_) => Err(Status::invalid_argument("lookup failed")),
+        // }
+        todo!()
     }
 
     async fn create(
@@ -219,6 +219,7 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<Create>,
     ) -> Result<tonic::Response<CreateReply>, tonic::Status> {
         let request_inner = request.into_inner();
+        todo!()
     }
 
     async fn unlink(
@@ -226,5 +227,6 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<Unlink>,
     ) -> Result<tonic::Response<UnlinkReply>, tonic::Status> {
         let request_inner = request.into_inner();
+        todo!()
     }
 }
