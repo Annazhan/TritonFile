@@ -1,18 +1,21 @@
-use crate::ops::{union, ListOp, LogOp, OpKind};
+use super::ops::{union, ListOp, LogOp, OpKind};
 use async_trait::async_trait;
+use fuser::FileAttr;
+use libc::c_int;
 use log::info;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::cmp;
 use std::collections::hash_map::DefaultHasher;
+use std::ffi::OsStr;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::num::ParseIntError;
 use std::sync::atomic;
 use tribbler::colon;
-use tribbler::err::{TribResult, TribblerError};
+use tribbler::error::{TritonFileError, TritonFileResult};
 use tribbler::storage;
-use tribbler::storage::{KeyValue, Storage};
+use tribbler::storage::{KeyValue, Storage, ServerFileSystem, FileRequest};
 
 use super::client;
 
@@ -64,7 +67,7 @@ pub fn compose_key(prefix: &str, kind: KeyKind, key: &str) -> String {
 }
 
 // Decode a list of string into a list of ops.
-fn decode_ops<T: DeserializeOwned>(ops: Vec<String>) -> TribResult<Vec<T>> {
+fn decode_ops<T: DeserializeOwned>(ops: Vec<String>) -> TritonFileResult<Vec<T>> {
     let mut result = vec![];
     for raw_op in ops {
         result.push(serde_json::from_str(&raw_op)?);
@@ -73,7 +76,7 @@ fn decode_ops<T: DeserializeOwned>(ops: Vec<String>) -> TribResult<Vec<T>> {
 }
 
 // Encode a list of ops into a list of string.
-fn encode_ops<T: Serialize>(ops: Vec<T>) -> TribResult<Vec<String>> {
+fn encode_ops<T: Serialize>(ops: Vec<T>) -> TritonFileResult<Vec<String>> {
     let mut result = vec![];
     for op in ops {
         result.push(serde_json::to_string(&op)?);
@@ -81,13 +84,13 @@ fn encode_ops<T: Serialize>(ops: Vec<T>) -> TribResult<Vec<String>> {
     Ok(result)
 }
 
-fn box_err<T>(err: TribblerError) -> TribResult<T> {
+fn box_err<T>(err: TritonFileError) -> TritonFileResult<T> {
     Err(Box::new(err))
 }
 
 // This is our backend interface.
 impl ReliableStore {
-    async fn get_store(&self, count: i32) -> TribResult<Box<dyn Storage>> {
+    async fn get_store(&self, count: i32) -> TritonFileResult<Box<dyn Storage>> {
         // start from the index and find the first alive one
         let mut idx = 0;
         let mut count = count;
@@ -95,7 +98,7 @@ impl ReliableStore {
         loop {
             limit -= 1;
             if limit == 0 {
-                break box_err(TribblerError::Unknown(
+                break box_err(TritonFileError::Unknown(
                     "can't find any live store".to_string(),
                 ));
             }
@@ -138,15 +141,15 @@ impl ReliableStore {
     }
 
     // Gets the primary backend for key.
-    async fn primary_store(&self) -> TribResult<Box<dyn Storage>> {
+    async fn primary_store(&self) -> TritonFileResult<Box<dyn Storage>> {
         self.get_store(1).await
     }
 
-    async fn backup_store(&self) -> TribResult<Box<dyn Storage>> {
+    async fn backup_store(&self) -> TritonFileResult<Box<dyn Storage>> {
         self.get_store(2).await
     }
 
-    // async fn lookup(&self, key: &str) -> TribResult<u64> {
+    // async fn lookup(&self, key: &str) -> TritonFileResult<u64> {
     //     loop {
     //         let primary = self.primary_store().await?;
     //         Ok(1)
@@ -154,7 +157,7 @@ impl ReliableStore {
     // }
 
     // Get sorted ops for key, key should be already composed.
-    async fn get_sorted_ops(&self, key: &str) -> TribResult<Vec<LogOp>> {
+    async fn get_sorted_ops(&self, key: &str) -> TritonFileResult<Vec<LogOp>> {
         loop {
             let primary = self.primary_store().await?;
             let mut primary_log = if self.simple {
@@ -211,10 +214,10 @@ impl ReliableStore {
 
     // Sync my clock to at least at_least, if increment is true,
     // increment my clock to at least at_least. Return the new clock.
-    fn clock(&self, at_least: u64, increment: bool) -> TribResult<()> {
+    fn clock(&self, at_least: u64, increment: bool) -> TritonFileResult<()> {
         let my_clock = self.clock.load(atomic::Ordering::SeqCst);
         if my_clock == u64::MAX {
-            return Err(Box::new(TribblerError::MaxedSeq));
+            return Err(Box::new(TritonFileError::MaxedSeq));
         }
         let prev_clock = self
             .clock
@@ -249,7 +252,7 @@ impl ReliableStore {
         &self,
         primary: &Box<dyn Storage>,
         backup: &Box<dyn Storage>,
-    ) -> TribResult<u64> {
+    ) -> TritonFileResult<u64> {
         let mut op_clock = primary.clock(0).await?;
         op_clock = backup.clock(op_clock).await?;
         Ok(op_clock)
@@ -261,7 +264,7 @@ impl ReliableStore {
         kv: &'a storage::KeyValue,
         clock: u64,
         kind: OpKind,
-    ) -> TribResult<()> {
+    ) -> TritonFileResult<()> {
         // info!("Write: clock {}, {}:{}", clock, &kv.key, &JV.value);
         let key_kind = match &kind {
             OpKind::KeyList(_) => KeyKind::KeyList,
@@ -286,7 +289,7 @@ impl ReliableStore {
         if success {
             Ok(())
         } else {
-            box_err(TribblerError::Unknown(
+            box_err(TritonFileError::Unknown(
                 "list_append returned false".to_string(),
             ))
         }
@@ -295,7 +298,7 @@ impl ReliableStore {
 
 #[async_trait]
 impl storage::KeyString for ReliableStore {
-    async fn get(&self, key: &str) -> TribResult<Option<String>> {
+    async fn get(&self, key: &str) -> TritonFileResult<Option<String>> {
         let ops: Vec<LogOp> = self
             .get_sorted_ops(&self.compose_key(KeyKind::KeyString, key))
             .await?;
@@ -306,7 +309,7 @@ impl storage::KeyString for ReliableStore {
         }
     }
 
-    async fn set(&self, kv: &storage::KeyValue) -> TribResult<bool> {
+    async fn set(&self, kv: &storage::KeyValue) -> TritonFileResult<bool> {
         loop {
             let primary = self.primary_store().await?;
             let backup = self.backup_store().await?;
@@ -329,7 +332,7 @@ impl storage::KeyString for ReliableStore {
         Ok(true)
     }
 
-    async fn keys(&self, p: &storage::Pattern) -> TribResult<storage::List> {
+    async fn keys(&self, p: &storage::Pattern) -> TritonFileResult<storage::List> {
         loop {
             let primary = self.primary_store().await?;
             match primary.keys(p).await {
@@ -342,7 +345,7 @@ impl storage::KeyString for ReliableStore {
 
 #[async_trait]
 impl storage::KeyList for ReliableStore {
-    async fn list_get(&self, key: &str) -> TribResult<storage::List> {
+    async fn list_get(&self, key: &str) -> TritonFileResult<storage::List> {
         let ops: Vec<LogOp> = self
             .get_sorted_ops(&self.compose_key(KeyKind::KeyList, key))
             .await?;
@@ -353,7 +356,7 @@ impl storage::KeyList for ReliableStore {
                 OpKind::KeyList(ListOp::Remove) => result.retain(|x| x != &op.val),
                 OpKind::KeyList(ListOp::Clear) => result = vec![],
                 OpKind::KeyString => {
-                    return box_err(TribblerError::Unknown(
+                    return box_err(TritonFileError::Unknown(
                         "OpKind shouln't be KeyString".to_string(),
                     ))
                 }
@@ -362,7 +365,7 @@ impl storage::KeyList for ReliableStore {
         Ok(storage::List(result))
     }
 
-    async fn list_keys(&self, p: &storage::Pattern) -> TribResult<storage::List> {
+    async fn list_keys(&self, p: &storage::Pattern) -> TritonFileResult<storage::List> {
         loop {
             let primary = self.primary_store().await?;
             match primary.list_keys(p).await {
@@ -372,7 +375,7 @@ impl storage::KeyList for ReliableStore {
         }
     }
 
-    async fn list_append(&self, kv: &storage::KeyValue) -> TribResult<bool> {
+    async fn list_append(&self, kv: &storage::KeyValue) -> TritonFileResult<bool> {
         loop {
             let primary = self.primary_store().await?;
             let backup = self.backup_store().await?;
@@ -395,7 +398,7 @@ impl storage::KeyList for ReliableStore {
         Ok(true)
     }
 
-    async fn list_remove(&self, kv: &storage::KeyValue) -> TribResult<u32> {
+    async fn list_remove(&self, kv: &storage::KeyValue) -> TritonFileResult<u32> {
         let prev_list = self.list_get(&kv.key).await?.0;
         let count = prev_list.iter().filter(|&x| x == &kv.value).count();
         loop {
@@ -423,7 +426,7 @@ impl storage::KeyList for ReliableStore {
 
 #[async_trait]
 impl storage::Storage for ReliableStore {
-    async fn clock(&self, at_least: u64) -> TribResult<u64> {
+    async fn clock(&self, at_least: u64) -> TritonFileResult<u64> {
         loop {
             let primary = self.primary_store().await?;
             match primary.clock(at_least).await {
@@ -448,7 +451,7 @@ pub fn hash_name_to_idx(name: &str, len: usize) -> usize {
 
 #[async_trait]
 impl storage::BinStorage for BinStore {
-    async fn bin(&self, name: &str) -> TribResult<Box<dyn Storage>> {
+    async fn bin(&self, name: &str) -> TritonFileResult<Box<dyn Storage>> {
         let length = self.addrs.len();
         let idx: usize = hash_name_to_idx(name, length);
         // info!("Create bin for {} -> {}", &name, idx);
@@ -467,7 +470,7 @@ impl storage::BinStorage for BinStore {
 }
 
 impl BinStore {
-    pub async fn keeper_bin(&self, name: &str) -> TribResult<Box<dyn Storage>> {
+    pub async fn keeper_bin(&self, name: &str) -> TritonFileResult<Box<dyn Storage>> {
         let length = self.addrs.len();
         let idx: usize = hash_name_to_idx(name, length);
         let mut new_addrs = Vec::new();
@@ -489,7 +492,7 @@ impl BinStore {
 impl ServerFileSystem for ReliableStore{
     async fn read(
         &self,
-        _req: &Request,
+        _req: &FileRequest,
         inode: u64,
         fh: u64,
         offset: i64,
@@ -509,8 +512,8 @@ impl ServerFileSystem for ReliableStore{
     }
 
     async fn write(
-        &mut self,
-        _req: &Request,
+        &self,
+        _req: &FileRequest,
         inode: u64,
         fh: u64,
         offset: i64,
@@ -543,8 +546,8 @@ impl ServerFileSystem for ReliableStore{
     }
 
     async fn lookup(
-        &mut self,
-        req: &Request,
+        &self,
+        req: &FileRequest,
         parent: u64,
         name: &OsStr,
     ) -> TritonFileResult<(Option<FileAttr>, c_int)>{
@@ -559,7 +562,7 @@ impl ServerFileSystem for ReliableStore{
         }
     }
 
-    async fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr) -> TritonFileResult<c_int>{
+    async fn unlink(&self, req: &FileRequest, parent: u64, name: &OsStr) -> TritonFileResult<c_int>{
         loop {
             let primary = self.primary_store().await?;
             match primary.unlink(req, parent, name)
@@ -584,8 +587,8 @@ impl ServerFileSystem for ReliableStore{
     }
 
     async fn create(
-        &mut self,
-        req: &Request,
+        &self,
+        req: &FileRequest,
         parent: u64,
         name: &OsStr,
         mut mode: u32,

@@ -16,7 +16,7 @@ pub mod addr;
 pub mod colon;
 pub mod config;
 pub mod disfuser;
-mod disfuser_server;
+pub mod disfuser_server;
 pub mod error;
 /// protobuf-generated RPC stubs and message structs
 pub mod rpc;

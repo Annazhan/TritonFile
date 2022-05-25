@@ -1,25 +1,26 @@
 use async_trait::async_trait;
+use libc::c_int;
 use tokio::sync::Mutex;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Code;
-use tribbler::err::TribResult;
+use tribbler::error::TritonFileResult;
 use tribbler::rpc;
 use tribbler::rpc::trib_storage_client::TribStorageClient;
-use tribbler::storage;
+use tribbler::storage::{self, FileRequest};
 use tribbler::storage::{KeyList, KeyString, Storage};
-use tribbler::disfuser;
+use tribbler::disfuser::{self, disfuser_server};
 
 pub const slice_size: usize = 1024; 
 pub struct StorageClient {
     channel: Mutex<Channel>,
 }
 
-pub async fn new_client(addr: &str) -> TribResult<Box<dyn Storage>> {
+pub async fn new_client(addr: &str) -> TritonFileResult<Box<dyn Storage>> {
     Ok(Box::new(StorageClient::new(addr)?))
 }
 
 impl StorageClient {
-    pub fn new(addr: &str) -> TribResult<StorageClient> {
+    pub fn new(addr: &str) -> TritonFileResult<StorageClient> {
         let channel = Endpoint::from_shared(format!("http://{}", addr))?.connect_lazy();
         Ok(StorageClient {
             channel: Mutex::new(channel),
@@ -259,7 +260,7 @@ impl ServerFileSystem for StorageClient{
 
 #[async_trait]
 impl KeyString for StorageClient {
-    async fn get(&self, key: &str) -> TribResult<Option<String>> {
+    async fn get(&self, key: &str) -> TritonFileResult<Option<String>> {
         let mut client = self.client().await;
 
         let result = client
@@ -279,7 +280,7 @@ impl KeyString for StorageClient {
         }
     }
 
-    async fn set(&self, kv: &storage::KeyValue) -> TribResult<bool> {
+    async fn set(&self, kv: &storage::KeyValue) -> TritonFileResult<bool> {
         let mut client = self.client().await;
         let result = client
             .set(rpc::KeyValue {
@@ -289,7 +290,7 @@ impl KeyString for StorageClient {
             .await?;
         Ok(result.into_inner().value)
     }
-    async fn keys(&self, p: &storage::Pattern) -> TribResult<storage::List> {
+    async fn keys(&self, p: &storage::Pattern) -> TritonFileResult<storage::List> {
         let mut client = self.client().await;
         let result = client
             .keys(rpc::Pattern {
@@ -303,7 +304,7 @@ impl KeyString for StorageClient {
 
 #[async_trait]
 impl KeyList for StorageClient {
-    async fn list_get(&self, key: &str) -> TribResult<storage::List> {
+    async fn list_get(&self, key: &str) -> TritonFileResult<storage::List> {
         let mut client = self.client().await;
         let result = client
             .list_get(rpc::Key {
@@ -313,7 +314,7 @@ impl KeyList for StorageClient {
         Ok(storage::List(result.into_inner().list))
     }
 
-    async fn list_keys(&self, p: &storage::Pattern) -> TribResult<storage::List> {
+    async fn list_keys(&self, p: &storage::Pattern) -> TritonFileResult<storage::List> {
         let mut client = self.client().await;
         let result = client
             .list_keys(rpc::Pattern {
@@ -324,7 +325,7 @@ impl KeyList for StorageClient {
         Ok(storage::List(result.into_inner().list))
     }
 
-    async fn list_append(&self, kv: &storage::KeyValue) -> TribResult<bool> {
+    async fn list_append(&self, kv: &storage::KeyValue) -> TritonFileResult<bool> {
         let mut client = self.client().await;
         let result = client
             .list_append(rpc::KeyValue {
@@ -335,7 +336,7 @@ impl KeyList for StorageClient {
         Ok(result.into_inner().value)
     }
 
-    async fn list_remove(&self, kv: &storage::KeyValue) -> TribResult<u32> {
+    async fn list_remove(&self, kv: &storage::KeyValue) -> TritonFileResult<u32> {
         let mut client = self.client().await;
         let result = client
             .list_remove(rpc::KeyValue {
@@ -349,7 +350,7 @@ impl KeyList for StorageClient {
 
 #[async_trait]
 impl Storage for StorageClient {
-    async fn clock(&self, at_least: u64) -> TribResult<u64> {
+    async fn clock(&self, at_least: u64) -> TritonFileResult<u64> {
         let mut client = self.client().await;
         let result = client
             .clock(rpc::Clock {
