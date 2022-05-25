@@ -124,7 +124,7 @@ impl ServerFileSystem for StorageClient{
     }
 
     async fn write(
-        &mut self,
+        &self,
         _req: &FileRequest,
         inode: u64,
         fh: u64,
@@ -165,7 +165,7 @@ impl ServerFileSystem for StorageClient{
     }
 
     async fn lookup(
-        &mut self,
+        &self,
         req: &FileRequest,
         parent: u64,
         name: &OsStr,
@@ -194,7 +194,7 @@ impl ServerFileSystem for StorageClient{
     }
 
     async fn create(
-        &mut self,
+        &self,
         req: &FileRequest,
         parent: u64,
         name: &OsStr,
@@ -234,7 +234,7 @@ impl ServerFileSystem for StorageClient{
         // Ok((attr, fh))
     }
 
-    async fn unlink(&mut self, req: &FileRequest, parent: u64, name: &OsStr) -> TritonFileResult<c_int>{
+    fn unlink(&self, req: &FileRequest, parent: u64, name: &OsStr) -> TritonFileResult<c_int>{
         let FReq = disfuser::FRequest{
             uid: req.uid,
             gid: req.gid,

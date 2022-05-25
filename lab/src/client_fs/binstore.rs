@@ -1,4 +1,3 @@
-use crate::client;
 use crate::ops::{union, ListOp, LogOp, OpKind};
 use async_trait::async_trait;
 use log::info;
@@ -14,6 +13,8 @@ use tribbler::colon;
 use tribbler::err::{TribResult, TribblerError};
 use tribbler::storage;
 use tribbler::storage::{KeyValue, Storage};
+
+use super::client;
 
 pub struct BinStore {
     addrs: Vec<String>,
