@@ -1,14 +1,21 @@
+use std::cmp::min;
+use std::ffi::OsStr;
+
 use async_trait::async_trait;
+use fuser::FileAttr;
 use libc::c_int;
 use tokio::sync::Mutex;
+use tokio_stream::Stream;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Code;
-use tribbler::error::TritonFileResult;
+use tribbler::error::{TritonFileResult, SUCCESS};
 use tribbler::rpc;
 use tribbler::rpc::trib_storage_client::TribStorageClient;
-use tribbler::storage::{self, FileRequest};
+use tribbler::storage::{self, FileRequest, ServerFileSystem};
 use tribbler::storage::{KeyList, KeyString, Storage};
-use tribbler::disfuser::{self, disfuser_server};
+use tribbler::disfuser::{
+    Create, CreateReply, LookUp, Read, Reply, Unlink, UnlinkReply, Write, WriteReply, FRequest,
+};
 
 pub const slice_size: usize = 1024; 
 pub struct StorageClient {
@@ -43,13 +50,13 @@ fn write_requests_iter(
     #[allow(unused_variables)] flags: i32,
     _lock_owner: Option<u64>, 
 ) -> impl Stream<Item = Write> {
-    let FReq = disfuser::FRequest{
+    let FReq = FRequest{
         uid: _req.uid,
         gid: _req.gid,
         pid: _req.pid,
     };
 
-    let data_string = serde_json::to_string(data); 
+    let data_string = serde_json::to_string(data).unwrap(); 
     let data_len = data_string.len();
     
     let mut n = data_len/slice_size; 
@@ -57,22 +64,22 @@ fn write_requests_iter(
         n += 1; 
     }
 
-    let mut vec: Vec<disfuser::Write> = Vec::new();
+    let mut vec: Vec<Write> = Vec::new();
     let mut start = 0; 
     let mut end = 0;
 
     for i in 0..n {
         start = i * slice_size; 
         end = min(start + slice_size, data_len);
-        let element = disfuser::Write{
-            FReq, 
-            inode,
+        let element = Write{
+            frequest: Some(FReq), 
+            ino: inode,
             fh,
             offset,
-            data_string.clone()[start..end].to_string(),
-            _write_flags,
+            data: data_string.clone()[start..end].to_string(),
+            write_flag: _write_flags,
             flags,
-            _lock_owner
+            lock_owner: _lock_owner?,
         }; 
         vec.push(element); 
     }
@@ -80,6 +87,7 @@ fn write_requests_iter(
     return Stream::iter(vec)
 }
 
+#[async_trait]
 impl ServerFileSystem for StorageClient{
     async fn read(
         &self,
@@ -92,36 +100,36 @@ impl ServerFileSystem for StorageClient{
         _lock_owner: Option<u64>,
     ) -> TritonFileResult<(Option<String>, c_int)>{
         let mut client = self.client().await;
-        let FReq = disfuser::FRequest{
+        let FReq = FRequest{
             uid: _req.uid,
             gid: _req.gid,
             pid: _req.pid,
         };
 
         let stream = client
-            .read(disfuser::Read{
-                FReq, 
-                inode,
+            .read(Read{
+                frequest: Some(FReq), 
+                ino: inode,
                 fh,
                 offset,
                 size,
-                _flags,
-                _lock_owner
+                flags: _flags,
+                lock_owner: _lock_owner
             }).await
             .unwrap()
             .into_inner();
         let mut received : Vec<String> = Vec::new();
-        let mut error_code: u64; 
+        let mut error_code: c_int; 
         let mut stream = stream.take();
         while let Some(item) = stream.next().await {
             received.push(item.unwrap().message);
             error_code = item.unwrap().errcode; 
-            if error_code!=SUCCESS{
-                Ok((None, error_code))
+            if error_code != SUCCESS{
+                return Ok((None, error_code));
             }
         }
         let joined_received = received.join("");
-        Ok((joined_received, SUCCESS))
+        Ok((Some(joined_received), SUCCESS))
     }
 
     async fn write(
@@ -135,7 +143,7 @@ impl ServerFileSystem for StorageClient{
         #[allow(unused_variables)] flags: i32,
         _lock_owner: Option<u64>,
     ) -> TritonFileResult<(Option<u32>, c_int)>{
-        let FReq = disfuser::FRequest{
+        let FReq = FRequest{
             uid: _req.uid,
             gid: _req.gid,
             pid: _req.pid,
@@ -144,7 +152,7 @@ impl ServerFileSystem for StorageClient{
         let mut client = self.client().await;
                 
         let in_stream = write_requests_iter(
-            FReq, 
+             FReq, 
             inode,
             fh,
             offset,
@@ -171,7 +179,7 @@ impl ServerFileSystem for StorageClient{
         parent: u64,
         name: &OsStr,
     ) -> TritonFileResult<(Option<FileAttr>, c_int)>{
-        let FReq = disfuser::FRequest{
+        let Freq = FRequest{
             uid: req.uid,
             gid: req.gid,
             pid: req.pid,
@@ -179,10 +187,10 @@ impl ServerFileSystem for StorageClient{
 
         let mut client = self.client().await;
         let result = client
-            .lookup(disfuser::LookUp {
-                Freq, 
+            .lookup(LookUp {
+                frequest: Some(Freq), 
                 parent,
-                name
+                name,
             })
         .await?;
         let error_code = result.into_inner().errcode;
@@ -203,7 +211,7 @@ impl ServerFileSystem for StorageClient{
         _umask: u32,
         flags: i32,
     ) -> TritonFileResult<(Option<(FileAttr, u64)>, c_int)>{
-        let FReq = disfuser::FRequest{
+        let FReq = FRequest{
             uid: req.uid,
             gid: req.gid,
             pid: req.pid,
@@ -211,13 +219,13 @@ impl ServerFileSystem for StorageClient{
 
         let mut client = self.client().await;
         let result = client
-            .create(disfuser::Create {
-                FReq,
+            .create(Create {
+                frequest: Some(FReq),
                 parent,
                 name,
                 mode,
-                _umask, 
-                flags
+                umask: _umask, 
+                flags,
             })
             .await?;
         
@@ -235,8 +243,8 @@ impl ServerFileSystem for StorageClient{
         // Ok((attr, fh))
     }
 
-    fn unlink(&self, req: &FileRequest, parent: u64, name: &OsStr) -> TritonFileResult<c_int>{
-        let FReq = disfuser::FRequest{
+    async fn unlink(&self, req: &FileRequest, parent: u64, name: &OsStr) -> TritonFileResult<c_int>{
+        let FReq = FRequest{
             uid: req.uid,
             gid: req.gid,
             pid: req.pid,
@@ -244,10 +252,10 @@ impl ServerFileSystem for StorageClient{
 
         let mut client = self.client().await;
         let result = client
-            .unlink(disfuser::Unlink {
-                FReq,
+            .unlink(Unlink {
+                frequest: Some(FReq),
                 parent, 
-                name
+                name,
             })
             .await?;
         let error_code = result.into_inner().errcode;
