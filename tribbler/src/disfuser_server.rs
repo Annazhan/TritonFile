@@ -7,16 +7,14 @@ use crate::storage::Storage;
 use async_trait::async_trait;
 use fuser::{BackgroundSession, FileAttr, MountOption, Request};
 use std::cmp::min;
-use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::pin::Pin;
-use sys::os_str::Slice;
 use tokio::sync::mpsc;
 use tokio::time::Duration;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::Stream;
 use tokio_stream::StreamExt;
 use tonic::{Response, Status};
-
 type readStream = Pin<Box<dyn Stream<Item = Result<Reply, Status>> + Send>>;
 // type readStream = Pin<Box<dyn Stream<Item = Result<Read, Status>> + Send>>;
 // type lookupStream = Pin<Box<dyn Stream<Item = Result<LookUp, Status>> + Send>>;
@@ -189,28 +187,31 @@ impl Disfuser for DisfuserServer {
         &self,
         request: tonic::Request<LookUp>,
     ) -> Result<tonic::Response<Reply>, tonic::Status> {
-        // let request_inner = request.into_inner();
-        // let mut file_request = FileRequest {
-        //     uid: request_inner.frequest.unwrap().uid,
-        //     gid: request_inner.frequest.unwrap().gid,
-        //     pid: request_inner.frequest.unwrap().pid,
-        // };
-        // let mut name = serde_json::from_str::<[FileAttr]>(&request_inner.name).unwrap();
-        // name = OsStr {
+        let request_inner = request.into_inner();
+        let mut file_request = FileRequest {
+            uid: request_inner.frequest.unwrap().uid,
+            gid: request_inner.frequest.unwrap().gid,
+            pid: request_inner.frequest.unwrap().pid,
+        };
+        let osstring = OsString::new();
+        osstring.push(request_inner.name);
+        // let mut name = serde_json::from_str::<&[u8]>(&request_inner.name).unwrap();
+        // let ostr = OsStr {
         //     inner: Slice { inner: *name },
         // };
-        // let result = self
-        //     .filesystem
-        //     .lookup(&file_request, request_inner.parent, &name)
-        //     .await;
+        let result = self
+            .filesystem
+            .lookup(&file_request, request_inner.parent, &osstring.as_os_str())
+            .await;
 
-        // match result {
-        //     Ok(value) => Ok(Response::new(Reply {
-        //         message: serde_json::to_string(&value.0.unwrap()),
-        //         errcode: value.1,
-        //     })),
-        //     Err(_) => Err(Status::invalid_argument("lookup failed")),
-        // }
+        match result {
+            Ok(value) => Ok(Response::new(Reply {
+                message: serde_json::to_string_pretty(&value.0.unwrap()).unwrap(),
+                // message: ron::ser::to_string(&value.0.unwrap()),
+                errcode: value.1,
+            })),
+            Err(_) => Err(Status::invalid_argument("lookup failed")),
+        }
     }
 
     async fn create(
