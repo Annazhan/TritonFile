@@ -1,6 +1,6 @@
 use crate::disfuser::disfuser_server::Disfuser;
 use crate::disfuser::{
-    Create, CreateReply, LookUp, Read, Reply, Unlink, UnlinkReply, Write, WriteReply,
+    Create, CreateReply, LockOwner, LookUp, Read, Reply, Unlink, UnlinkReply, Write, WriteReply,
 };
 use crate::storage::FileRequest;
 use crate::storage::Storage;
@@ -79,7 +79,7 @@ impl Disfuser for DisfuserServer {
                 r_inner.offset,
                 r_inner.size,
                 r_inner.flags,
-                Some(r_inner.lock_owner),
+                Some(r_inner.lock_owner.unwrap().lock_owner),
             )
             .await;
 
@@ -156,7 +156,7 @@ impl Disfuser for DisfuserServer {
                     offset = v.offset;
                     _write_flags = v.write_flag;
                     flags = v.flags;
-                    _lock_owner = Some(v.lock_owner);
+                    _lock_owner = Some(v.lock_owner.unwrap().lock_owner);
                 }
                 None => {}
             }

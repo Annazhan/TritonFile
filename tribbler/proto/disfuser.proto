@@ -10,6 +10,10 @@ message FRequest {
     uint32 pid = 3;
 }
 
+message LockOwner {
+    uint64 lock_owner = 1;
+}
+
 message Read {
     FRequest frequest = 1;
     uint64 ino = 2;
@@ -17,7 +21,7 @@ message Read {
     int64 offset= 4;
     uint32 size = 5;
     int32 flags = 6;
-    uint64 lock_owner = 7;
+    LockOwner lock_owner = 7;
 }
 
 message Data {
@@ -32,7 +36,7 @@ message Write {
     string data = 5; // [u8]
     uint32 write_flag = 6;
     int32 flags = 7;
-    uint64 lock_owner = 8;
+    LockOwner lock_owner = 8;
 }
 
 message LookUp {
