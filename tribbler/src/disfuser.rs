@@ -8,11 +8,6 @@ pub struct FRequest {
     pub pid: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct LockOwner {
-    #[prost(uint64, tag = "1")]
-    pub lock_owner: u64,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Read {
     #[prost(message, optional, tag = "1")]
     pub frequest: ::core::option::Option<FRequest>,
@@ -26,8 +21,8 @@ pub struct Read {
     pub size: u32,
     #[prost(int32, tag = "6")]
     pub flags: i32,
-    #[prost(message, optional, tag = "7")]
-    pub lock_owner: ::core::option::Option<LockOwner>,
+    #[prost(uint64, tag = "7")]
+    pub lock_owner: u64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Data {
@@ -52,8 +47,8 @@ pub struct Write {
     pub write_flag: u32,
     #[prost(int32, tag = "7")]
     pub flags: i32,
-    #[prost(message, optional, tag = "8")]
-    pub lock_owner: ::core::option::Option<LockOwner>,
+    #[prost(uint64, tag = "8")]
+    pub lock_owner: u64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct LookUp {

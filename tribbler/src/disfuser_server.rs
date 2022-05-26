@@ -1,7 +1,8 @@
 use crate::disfuser::disfuser_server::{self, Disfuser};
 use crate::disfuser::{
-    Create, CreateReply, LockOwner, LookUp, Read, Reply, Unlink, UnlinkReply, Write, WriteReply,
+    Create, CreateReply, LookUp, Read, Reply, Unlink, UnlinkReply, Write, WriteReply,
 };
+use crate::error::SUCCESS;
 use crate::storage::FileRequest;
 use crate::storage::Storage;
 use async_trait::async_trait;
@@ -79,13 +80,13 @@ impl Disfuser for DisfuserServer {
                 r_inner.offset,
                 r_inner.size,
                 r_inner.flags,
-                Some(r_inner.lock_owner.unwrap().lock_owner),
+                Some(r_inner.lock_owner),
             )
             .await;
         let mut reply = Vec::new();
         match result {
             Ok(value) => {
-                if value.1 > 0 {
+                if value.1 != SUCCESS {
                     reply = vec![Reply {
                         message: "".to_string(),
                         errcode: value.1,
@@ -93,7 +94,7 @@ impl Disfuser for DisfuserServer {
                 } else {
                     // divide the message into appropriate size, and make a vector
                     let content = value.0.unwrap();
-                    reply = reply_response_iter(content, -1);
+                    reply = reply_response_iter(content, SUCCESS);
                 }
             }
             Err(_) => {}
@@ -155,7 +156,7 @@ impl Disfuser for DisfuserServer {
                     offset = v.offset;
                     _write_flags = v.write_flag;
                     flags = v.flags;
-                    _lock_owner = Some(v.lock_owner.unwrap().lock_owner);
+                    _lock_owner = Some(v.lock_owner);
                 }
                 None => {}
             }
