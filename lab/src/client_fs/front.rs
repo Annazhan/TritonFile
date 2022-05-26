@@ -1,57 +1,26 @@
 #![allow(clippy::needless_return)]
 
-use clap::{crate_version, Arg, Command};
-use fuser::consts::FOPEN_DIRECT_IO;
 #[cfg(feature = "abi-7-26")]
 use fuser::consts::FUSE_HANDLE_KILLPRIV;
 #[cfg(feature = "abi-7-31")]
 use fuser::consts::FUSE_WRITE_KILL_PRIV;
-use fuser::TimeOrNow::Now;
-use fuser::{
-    Filesystem, KernelConfig, MountOption, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory,
-    ReplyEmpty, ReplyEntry, ReplyOpen, ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow,
-    FUSE_ROOT_ID,
-};
+use fuser::{Filesystem, ReplyCreate, ReplyData, ReplyEmpty, ReplyEntry, ReplyWrite, Request};
 #[cfg(feature = "abi-7-26")]
 use log::info;
-use log::{debug, warn};
-use log::{error, LevelFilter};
-use serde::{Deserialize, Serialize};
-use std::cmp::min;
-use std::collections::BTreeMap;
-use std::error::Error;
-use std::f32::consts::E;
 use std::ffi::OsStr;
-use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
-use std::os::raw::c_int;
-use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::FileExt;
 #[cfg(target_os = "linux")]
-use std::os::unix::io::IntoRawFd;
-use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use std::{env, fs, io};
+use std::time::Duration;
 use tribbler::storage::FileRequest;
 
-use async_trait::async_trait;
-use log::info;
-// use rand;
 use std::sync::atomic;
-use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc::error::TryRecvError;
-use tokio::sync::mpsc::Receiver;
-use tokio::time;
-use tokio::time::timeout;
 
 use tribbler::error::{TritonFileError, TritonFileResult, SUCCESS};
-use tribbler::{colon, storage};
+use tribbler::storage;
 
 const BLOCK_SIZE: u64 = 512;
 const MAX_NAME_LENGTH: u32 = 255;
 const MAX_FILE_SIZE: u64 = 1024 * 1024 * 1024 * 1024;
-
 const ERR_CODE_PLACEHOLDER: i32 = 20;
 
 pub struct Front {

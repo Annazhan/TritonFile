@@ -6,19 +6,20 @@ use fuser::FileAttr;
 use libc::c_int;
 use tokio::sync::Mutex;
 use tokio_stream::Stream;
+use tokio_stream::StreamExt;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Code;
 use tribbler::disfuser::disfuser_client::DisfuserClient;
 use tribbler::disfuser::{
     Create, CreateReply, FRequest, LookUp, Read, Reply, Unlink, UnlinkReply, Write, WriteReply,
 };
+use tribbler::disfuser_server::slice_size;
 use tribbler::error::{TritonFileResult, SUCCESS};
 use tribbler::rpc;
 use tribbler::rpc::trib_storage_client::TribStorageClient;
 use tribbler::storage::{self, FileRequest, ServerFileSystem};
 use tribbler::storage::{KeyList, KeyString, Storage};
 
-pub const slice_size: usize = 1024;
 pub struct StorageClient {
     channel: Mutex<Channel>,
 }

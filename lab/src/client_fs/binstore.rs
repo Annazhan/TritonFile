@@ -10,12 +10,11 @@ use std::collections::hash_map::DefaultHasher;
 use std::ffi::OsStr;
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::num::ParseIntError;
 use std::sync::atomic;
 use tribbler::colon;
 use tribbler::error::{TritonFileError, TritonFileResult};
 use tribbler::storage;
-use tribbler::storage::{KeyValue, Storage, ServerFileSystem, FileRequest};
+use tribbler::storage::{FileRequest, KeyValue, ServerFileSystem, Storage};
 
 use super::client;
 
@@ -489,7 +488,7 @@ impl BinStore {
 }
 
 #[async_trait]
-impl ServerFileSystem for ReliableStore{
+impl ServerFileSystem for ReliableStore {
     async fn read(
         &self,
         _req: &FileRequest,
@@ -499,14 +498,15 @@ impl ServerFileSystem for ReliableStore{
         size: u32,
         _flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<(Option<String>, c_int)>{
+    ) -> TritonFileResult<(Option<String>, c_int)> {
         loop {
             let primary = self.primary_store().await?;
-            match primary.read(_req, inode, fh, offset, size, _flags, _lock_owner).await {
-                Ok(res) => {
-                    Ok(res)
-                }, 
-                Err(_) => continue
+            match primary
+                .read(_req, inode, fh, offset, size, _flags, _lock_owner)
+                .await
+            {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
             }
         }
     }
@@ -521,26 +521,43 @@ impl ServerFileSystem for ReliableStore{
         _write_flags: u32,
         #[allow(unused_variables)] flags: i32,
         _lock_owner: Option<u64>,
-    ) -> TritonFileResult<(Option<u32>, c_int)>{
+    ) -> TritonFileResult<(Option<u32>, c_int)> {
         loop {
             let primary = self.primary_store().await?;
-            match primary.write(_req, inode, fh, offset, data, _write_flags, flags, _lock_owner)
-            .await{
-                Ok(res) => {
-                    Ok(res)
-                },
-                Err(_) => continue 
-            }
-        }
-
-        loop{
             let backup = self.backup_store().await?;
-            match backup.write(_req, inode, fh, offset, data, _write_flags, flags, _lock_owner)
-            .await{
-                Ok(res) => {
-                    Ok(res)
-                },
-                Err(_) => continue 
+
+            match primary
+                .write(
+                    _req,
+                    inode,
+                    fh,
+                    offset,
+                    data,
+                    _write_flags,
+                    flags,
+                    _lock_owner,
+                )
+                .await
+            {
+                Err(_) => continue,
+                Ok(_) => (),
+            }
+
+            match backup
+                .write(
+                    _req,
+                    inode,
+                    fh,
+                    offset,
+                    data,
+                    _write_flags,
+                    flags,
+                    _lock_owner,
+                )
+                .await
+            {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
             }
         }
     }
@@ -550,38 +567,32 @@ impl ServerFileSystem for ReliableStore{
         req: &FileRequest,
         parent: u64,
         name: &OsStr,
-    ) -> TritonFileResult<(Option<FileAttr>, c_int)>{
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
         loop {
             let primary = self.primary_store().await?;
-            match primary.lookup(req, parent, name).await{
-                Ok(res) => {
-                    Ok(res)
-                },
-                Err(_) => continue
+            match primary.lookup(req, parent, name).await {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
             }
         }
     }
 
-    async fn unlink(&self, req: &FileRequest, parent: u64, name: &OsStr) -> TritonFileResult<c_int>{
+    async fn unlink(
+        &self,
+        req: &FileRequest,
+        parent: u64,
+        name: &OsStr,
+    ) -> TritonFileResult<c_int> {
         loop {
             let primary = self.primary_store().await?;
-            match primary.unlink(req, parent, name)
-            .await{
-                Ok(res) => {
-                    Ok(res)
-                },
-                Err(_) => continue
-            }
-        }
-
-        loop{
             let backup = self.backup_store().await?;
-            match backup.unlink(req, parent, name)
-            .await{
-                Ok(res) => {
-                    Ok(res)
-                },
-                Err(_) => continue
+            match primary.unlink(req, parent, name).await {
+                Err(_) => continue,
+                Ok(_) => (),
+            }
+            match backup.unlink(req, parent, name).await {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
             }
         }
     }
@@ -594,26 +605,17 @@ impl ServerFileSystem for ReliableStore{
         mut mode: u32,
         _umask: u32,
         flags: i32,
-    ) -> TritonFileResult<(Option<(FileAttr, u64)>, c_int)>{
+    ) -> TritonFileResult<(Option<(FileAttr, u64)>, c_int)> {
         loop {
             let primary = self.primary_store().await?;
-            match primary.create(req, parent, name, mode, _umask, flags)
-            .await{
-                Ok(res) => {
-                    Ok(res)
-                },
-                Err(_) => continue
-            }
-        }
-
-        loop{
             let backup = self.backup_store().await?;
-            match backup.create(req, parent, name, mode, _umask, flags)
-            .await{
-                Ok(res) => {
-                    Ok(res)
-                },
-                Err(_) => continue
+            match primary.create(req, parent, name, mode, _umask, flags).await {
+                Err(_) => continue,
+                Ok(_) => (),
+            }
+            match backup.create(req, parent, name, mode, _umask, flags).await {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
             }
         }
     }
