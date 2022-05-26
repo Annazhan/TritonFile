@@ -18,11 +18,6 @@ use std::sync::atomic;
 use tribbler::error::{TritonFileError, TritonFileResult, SUCCESS};
 use tribbler::storage;
 
-const BLOCK_SIZE: u64 = 512;
-const MAX_NAME_LENGTH: u32 = 255;
-const MAX_FILE_SIZE: u64 = 1024 * 1024 * 1024 * 1024;
-const ERR_CODE_PLACEHOLDER: i32 = 20;
-
 pub struct Front {
     // original Front
     binstore: Box<dyn storage::BinStorage>,
@@ -100,10 +95,6 @@ impl Front {
 
 impl Filesystem for Front {
     fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
-        if name.len() > MAX_NAME_LENGTH as usize {
-            return reply.error(libc::ENAMETOOLONG);
-        }
-
         // ReliableStore
         let gid = req.gid().to_string().clone();
         let bin_pre = self.binstore.bin(gid.as_str());
