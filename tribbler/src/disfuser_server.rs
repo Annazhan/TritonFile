@@ -1,4 +1,4 @@
-use crate::disfuser::disfuser_server::Disfuser;
+use crate::disfuser::disfuser_server::{self, Disfuser};
 use crate::disfuser::{
     Create, CreateReply, LockOwner, LookUp, Read, Reply, Unlink, UnlinkReply, Write, WriteReply,
 };
@@ -18,6 +18,7 @@ use tonic::{Response, Status};
 type readStream = Pin<Box<dyn Stream<Item = Result<Reply, Status>> + Send>>;
 // type readStream = Pin<Box<dyn Stream<Item = Result<Read, Status>> + Send>>;
 // type lookupStream = Pin<Box<dyn Stream<Item = Result<LookUp, Status>> + Send>>;
+pub const slice_size: usize = 128;
 
 pub struct DisfuserServer {
     pub filesystem: Box<dyn Storage>,
@@ -25,7 +26,6 @@ pub struct DisfuserServer {
 }
 
 fn reply_response_iter(msg: String, errcode: i32) -> Vec<Reply> {
-    let slice_size = 128;
     let data_len = msg.len();
 
     let mut n = data_len / slice_size;
@@ -82,7 +82,6 @@ impl Disfuser for DisfuserServer {
                 Some(r_inner.lock_owner.unwrap().lock_owner),
             )
             .await;
-
         let mut reply = Vec::new();
         match result {
             Ok(value) => {
@@ -191,7 +190,7 @@ impl Disfuser for DisfuserServer {
         &self,
         request: tonic::Request<LookUp>,
     ) -> Result<tonic::Response<Reply>, tonic::Status> {
-        let request_inner = request.into_inner();
+        let mut request_inner = request.into_inner();
         let mut file_request = FileRequest {
             uid: request_inner.frequest.clone().unwrap().uid,
             gid: request_inner.frequest.clone().unwrap().gid,

@@ -129,7 +129,7 @@ pub trait ServerFileSystem {
     ) -> TritonFileResult<(Option<String>, c_int)>;
 
     async fn write(
-        &mut self,
+        &self,
         _req: &FileRequest,
         inode: u64,
         fh: u64,
@@ -141,21 +141,17 @@ pub trait ServerFileSystem {
     ) -> TritonFileResult<(Option<u32>, c_int)>;
 
     async fn lookup(
-        &mut self,
+        &self,
         req: &FileRequest,
         parent: u64,
         name: &OsStr,
     ) -> TritonFileResult<(Option<FileAttr>, c_int)>;
 
-    async fn unlink(
-        &mut self,
-        req: &FileRequest,
-        parent: u64,
-        name: &OsStr,
-    ) -> TritonFileResult<c_int>;
+    async fn unlink(&self, req: &FileRequest, parent: u64, name: &OsStr)
+        -> TritonFileResult<c_int>;
 
     async fn create(
-        &mut self,
+        &self,
         req: &FileRequest,
         parent: u64,
         name: &OsStr,
@@ -349,7 +345,7 @@ impl ServerFileSystem for RemoteFileSystem {
     }
 
     async fn write(
-        &mut self,
+        &self,
         _req: &FileRequest,
         inode: u64,
         fh: u64,
@@ -394,7 +390,7 @@ impl ServerFileSystem for RemoteFileSystem {
     }
 
     async fn lookup(
-        &mut self,
+        &self,
         req: &FileRequest,
         parent: u64,
         name: &OsStr,
@@ -424,7 +420,7 @@ impl ServerFileSystem for RemoteFileSystem {
     }
 
     async fn unlink(
-        &mut self,
+        &self,
         req: &FileRequest,
         parent: u64,
         name: &OsStr,
@@ -484,7 +480,7 @@ impl ServerFileSystem for RemoteFileSystem {
     }
 
     async fn create(
-        &mut self,
+        &self,
         req: &FileRequest,
         parent: u64,
         name: &OsStr,

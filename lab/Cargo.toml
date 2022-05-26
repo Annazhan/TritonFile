@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 tribbler = { path = "../tribbler" }
-fuser = {path = "../tribbler/fuser"}
+fuser = {path = "../tribbler/fuser", features = ["serializable"]}
 tonic = "0.6"
 libc = "0.2.51"
 log = "0.4.6"

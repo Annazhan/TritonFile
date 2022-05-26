@@ -2049,3 +2049,37 @@ fn main() {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::time::SystemTime;
+
+    use fuser::FileAttr;
+
+    use serde::{Deserialize, Serialize};
+
+    use super::{system_time_from_time, time_now, FileKind};
+
+    #[cfg(feature = "serializable")]
+    #[tokio::test]
+    async fn test_serialize_file_attr() {
+        let fa = FileAttr {
+            ino: 1,
+            size: 4,
+            blocks: 0,
+            atime: system_time_from_time(time_now().0, time_now().1),
+            mtime: system_time_from_time(time_now().0, time_now().1),
+            ctime: system_time_from_time(time_now().0, time_now().1),
+            crtime: SystemTime::UNIX_EPOCH,
+            kind: fuser::FileType::RegularFile,
+            perm: 0,
+            nlink: 0,
+            uid: 0,
+            gid: 0,
+            rdev: 0,
+            blksize: 0,
+            flags: 0,
+        };
+        println!("{}", serde_json::to_string(&fa).unwrap());
+    }
+}
