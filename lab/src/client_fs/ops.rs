@@ -8,6 +8,15 @@ pub enum ListOp {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub enum FileOp {
+    Lookup,
+    Create,
+    Write,
+    Read,
+    Unlink,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub enum OpKind {
     KeyString,
     KeyList(ListOp),
@@ -19,6 +28,13 @@ pub struct LogOp {
     pub val: String,
     pub clock: u64,
     pub kind: OpKind,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FileLogOp{
+    pub val: String, 
+    pub clock: u64,
+    pub kind: FileOp,
 }
 
 // Union b into a.
