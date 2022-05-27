@@ -246,7 +246,7 @@ impl From<InodeAttributes> for fuser::FileAttr {
 pub struct SimpleFS {
     data_dir: String,
     next_file_handle: AtomicU64,
-    direct_io: bool,
+    pub direct_io: bool,
     suid_support: bool,
 }
 

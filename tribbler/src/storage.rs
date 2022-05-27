@@ -2,6 +2,7 @@
 //! module containing Tribbler storage-related structs and implementations
 use async_trait::async_trait;
 use bson::Bson;
+use fuser::consts::FOPEN_DIRECT_IO;
 use fuser::Reply;
 use fuser::ReplyData;
 use fuser::Session;
@@ -27,6 +28,7 @@ use tokio_stream::{Stream, StreamExt};
 use crate::error;
 use crate::error::TritonFileError;
 use crate::error::TritonFileResult;
+use crate::error::SUCCESS;
 use crate::simple;
 use crate::simple::check_access;
 use crate::simple::clear_suid_sgid;
@@ -34,6 +36,7 @@ use crate::simple::time_now;
 use crate::simple::FileKind;
 use crate::simple::InodeAttributes;
 use crate::simple::SimpleFS;
+use crate::simple::FMODE_EXEC;
 
 use fuser::{BackgroundSession, FileAttr, MountOption, Request};
 
@@ -173,7 +176,7 @@ pub trait ServerFileSystem {
         _req: &FileRequest,
         _ino: u64,
         _flags: i32,
-    ) -> TritonFileResult<(Option<u64>, c_int)>;
+    ) -> TritonFileResult<(Option<(u64, u32)>, c_int)>;
 
     async fn release(
         &self,
@@ -645,6 +648,144 @@ impl ServerFileSystem for RemoteFileSystem {
             Some((attrs.into(), fs.allocate_next_file_handle(read, write))),
             error::SUCCESS,
         ))
+    }
+
+    async fn getattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
+        let fs = &self.fs;
+        match fs.get_inode(ino) {
+            Ok(attrs) => Ok((Some(attrs.into()), SUCCESS)),
+            Err(error_code) => Ok((None, error_code)),
+        }
+    }
+
+    async fn open(
+        &self,
+        req: &FileRequest,
+        inode: u64,
+        flags: i32,
+    ) -> TritonFileResult<(Option<(u64, u32)>, c_int)> {
+        let fs = &self.fs;
+
+        info!("open() called for {:?}", inode);
+        let (access_mask, read, write) = match flags & libc::O_ACCMODE {
+            libc::O_RDONLY => {
+                // Behavior is undefined, but most filesystems return EACCES
+                if flags & libc::O_TRUNC != 0 {
+                    return Ok((None, libc::EACCES));
+                }
+                if flags & FMODE_EXEC != 0 {
+                    // Open is from internal exec syscall
+                    (libc::X_OK, true, false)
+                } else {
+                    (libc::R_OK, true, false)
+                }
+            }
+            libc::O_WRONLY => (libc::W_OK, false, true),
+            libc::O_RDWR => (libc::R_OK | libc::W_OK, true, true),
+            // Exactly one access mode flag must be specified
+            _ => {
+                return Ok((None, libc::EINVAL));
+            }
+        };
+
+        match fs.get_inode(inode) {
+            Ok(mut attr) => {
+                if check_access(attr.uid, attr.gid, attr.mode, req.uid, req.gid, access_mask) {
+                    attr.open_file_handles += 1;
+                    fs.write_inode(&attr);
+                    let open_flags = if fs.direct_io { FOPEN_DIRECT_IO } else { 0 };
+                    reply.opened(fs.allocate_next_file_handle(read, write), open_flags);
+                } else {
+                    reply.error(libc::EACCES);
+                }
+                return;
+            }
+            Err(error_code) => reply.error(error_code),
+        }
+    }
+
+    async fn release(
+        &self,
+        _req: &FileRequest,
+        _ino: u64,
+        _fh: u64,
+        _flags: i32,
+        _lock_owner: Option<u64>,
+        _flush: bool,
+    ) -> TritonFileResult<(c_int)> {
+        todo!()
+    }
+
+    async fn setxattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+        name: &OsStr,
+        _value: &[u8],
+        flags: i32,
+        position: u32,
+    ) -> TritonFileResult<(c_int)> {
+        todo!()
+    }
+
+    //reply Vec<u8> as string
+    async fn getxattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+        name: &OsStr,
+        size: u32,
+    ) -> TritonFileResult<(Option<(String, u32)>, c_int)> {
+        todo!()
+    }
+
+    async fn listxattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+        size: u32,
+    ) -> TritonFileResult<(Option<(String, u32)>, c_int)> {
+        todo!()
+    }
+
+    async fn access(&self, _req: &FileRequest, ino: u64, mask: i32) -> TritonFileResult<(c_int)> {
+        todo!()
+    }
+
+    async fn rename(
+        &self,
+        _req: &FileRequest,
+        parent: u64,
+        name: &OsStr,
+        newparent: u64,
+        newname: &OsStr,
+        flags: u32,
+    ) -> TritonFileResult<(c_int)> {
+        todo!()
+    }
+
+    async fn setattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+        mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        _atime: Option<TimeOrNow>,
+        _mtime: Option<TimeOrNow>,
+        _ctime: Option<SystemTime>,
+        fh: Option<u64>,
+        _crtime: Option<SystemTime>,
+        _chgtime: Option<SystemTime>,
+        _bkuptime: Option<SystemTime>,
+        flags: Option<u32>,
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
+        todo!()
     }
 }
 
