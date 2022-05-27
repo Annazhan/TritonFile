@@ -20,6 +20,7 @@ type readStream = Pin<Box<dyn Stream<Item = Result<Reply, Status>> + Send>>;
 // type readStream = Pin<Box<dyn Stream<Item = Result<Read, Status>> + Send>>;
 // type lookupStream = Pin<Box<dyn Stream<Item = Result<LookUp, Status>> + Send>>;
 pub const slice_size: usize = 128;
+use crate::storage;
 
 pub struct DisfuserServer {
     pub filesystem: Box<dyn Storage>,
@@ -49,6 +50,14 @@ fn reply_response_iter(msg: String, errcode: i32) -> Vec<Reply> {
     }
 
     return vec;
+}
+
+impl DisfuserServer {
+    pub fn new(storage: Box<dyn storage::Storage>) -> DisfuserServer {
+        DisfuserServer {
+            filesystem: storage,
+        }
+    }
 }
 
 #[async_trait]
