@@ -1,15 +1,29 @@
-use std::{sync::{Arc, atomic}, vec};
+use std::{
+    sync::{atomic, Arc},
+    vec,
+};
 
-use log::info;
-use serde::{Serialize, Deserialize};
-use tokio::{sync::{Mutex, mpsc::{Receiver, error::TryRecvError}}, time::{self, timeout}};
-use tribbler::{storage::{self, Storage}, config::KeeperConfig, error::{TritonFileResult}, storage::KeyValue};
 use core::sync::atomic::AtomicU64;
+use log::info;
+use serde::{Deserialize, Serialize};
 use std::sync::mpsc::Sender;
+use tokio::{
+    sync::{
+        mpsc::{error::TryRecvError, Receiver},
+        Mutex,
+    },
+    time::{self, timeout},
+};
+use tribbler::{
+    config::KeeperConfig,
+    error::TritonFileResult,
+    storage::{KeyValue, FileRequest},
+    storage::{self, Storage},
+};
 
 use crate::client_fs::client::new_client;
 
-use super::binstore::{self, BinStore, hash_name_to_idx};
+use super::binstore::{self, hash_name_to_idx, BinStore};
 
 #[derive(Serialize, Deserialize, Debug)]
 enum LiveState {
@@ -21,7 +35,7 @@ const KEY_KEEPER: &str = "KEEPER";
 const KEY_TIMESTAMP: &str = "TIMESTAMP";
 const KEY_KEEPER_REPLICATE: &str = "LIVE_LIST_STATE";
 
-struct Keeper{
+struct Keeper {
     clock: Arc<AtomicU64>,
     // Addresses for keepers.
     addrs: Arc<Mutex<Vec<String>>>,
@@ -34,19 +48,45 @@ struct Keeper{
 }
 
 impl Keeper {
-    async fn new(kp_addrs: Vec<String>, bk_addrs: Vec<String>, ready:Option<Sender<bool>>,  storage: Box<dyn Storage>) -> Keeper{
-        Keeper{
+    async fn new(
+        kp_addrs: Vec<String>,
+        bk_addrs: Vec<String>,
+        ready: Option<Sender<bool>>,
+        storage: Box<dyn Storage>,
+    ) -> Keeper {
+        Keeper {
             clock: Arc::new(atomic::AtomicU64::new(1)),
             addrs: Arc::new(Mutex::new(kp_addrs.clone())),
             backs: Arc::new(Mutex::new(bk_addrs.clone())),
             this: 0,
             keep_bin: storage,
-            timestamp: Arc::new(atomic::AtomicU64::new(1)), 
+            timestamp: Arc::new(atomic::AtomicU64::new(1)),
             live_list: Arc::new(Mutex::new(vec![false; bk_addrs.len()])),
         }
     }
 
-    
+    async fn replicate_all_file(&self, inode: u64, from: usize,
+        to: usize,
+        for_addr: usize,
+        live_list: &Vec<bool>) -> TritonFileResult<()> {
+        let fileRequest = FileRequest{
+            uid: 0,
+            gid: 0,
+            pid: 0,
+        };
+
+        let (from_cli, to_cli) = {
+            let backs = self.backs.lock().await;
+            (
+                new_client(&backs[from]).await?,
+                new_client(&backs[to]).await?,
+            )
+        };
+
+        let fileAttr = from_cli.lookup(&fileRequest, inode, "").await?
+
+        Ok(())
+    }
 }
 
 fn send_signal(chan: &Option<Sender<bool>>, signal: bool) -> TritonFileResult<()> {
@@ -99,7 +139,10 @@ pub async fn serve_keeper(kc: KeeperConfig) -> TritonFileResult<()> {
     }
 }
 
-async fn background_update_clock(keeper: Arc<Keeper>, shutdown: Receiver<()>) -> TritonFileResult<()> {
+async fn background_update_clock(
+    keeper: Arc<Keeper>,
+    shutdown: Receiver<()>,
+) -> TritonFileResult<()> {
     let mut shutdown = Some(shutdown);
     loop {
         if should_shutdown(&mut shutdown)? {
@@ -170,10 +213,10 @@ impl Keeper {
     async fn serve_one_round(&self) -> TritonFileResult<()> {
         info!("{} serving one round", self.print_name(),);
         let living_keepers = self.living_keepers().await?;
-            // I'm leader, serve and return.
+        // I'm leader, serve and return.
         info!("{}: I'm leader", self.print_name());
         let mut old_live_list = self.live_list.lock().await;
-            // Get new live list, save it, and serve as keeper.
+        // Get new live list, save it, and serve as keeper.
         let new_live_list = self.broadcast(time::Duration::from_millis(1000)).await?;
         self.serve_as_leader(&old_live_list, &new_live_list).await?;
         // It is important that we save the live list AFTER
@@ -183,20 +226,20 @@ impl Keeper {
         *old_live_list = new_live_list;
         //return Ok(());
         // If we reach here, we might become the leader.
-        let min_living_keeper = living_keepers.iter().min().unwrap();
-        if *min_living_keeper == self.this {
-            info!("{}: leader dead, I'm the new leader", self.print_name());
-            // When we become leader, inherit live_list from last
-            // leader, or use default (all dead).
-            let last_leader_live_list = match self.get_live_list_backup().await? {
-                None => vec![false; self.backs.lock().await.len()],
-                Some(list) => list,
-            };
-            let mut keeper_live_list = self.live_list.lock().await;
-            *keeper_live_list = last_leader_live_list;
-        } else {
-            info!("{}: leader dead, but I'm not min idx", self.print_name());
-        }
+        // let min_living_keeper = living_keepers.iter().min().unwrap();
+        // if *min_living_keeper == self.this {
+        //     info!("{}: leader dead, I'm the new leader", self.print_name());
+        //     // When we become leader, inherit live_list from last
+        //     // leader, or use default (all dead).
+        //     let last_leader_live_list = match self.get_live_list_backup().await? {
+        //         None => vec![false; self.backs.lock().await.len()],
+        //         Some(list) => list,
+        //     };
+        //     let mut keeper_live_list = self.live_list.lock().await;
+        //     *keeper_live_list = last_leader_live_list;
+        // } else {
+        //     info!("{}: leader dead, but I'm not min idx", self.print_name());
+        // }
         Ok(())
     }
 
@@ -223,7 +266,6 @@ impl Keeper {
         }
         Ok(())
     }
-
 
     async fn replicate(
         &self,
@@ -257,16 +299,16 @@ impl Keeper {
             let primary_for_key = key_primary_idx(idx, live_list).unwrap();
 
             if primary_for_key == for_addr {
-                let values_in_from = from_cli.list_get(&key.as_str()).await?.0;
-                let values_in_to = to_cli.list_get(&key.as_str()).await?.0;
-                for val in values_in_from {
-                    if !values_in_to.contains(&val) {
-                        let kv = storage::KeyValue {
-                            key: key.clone(),
-                            value: val.clone(),
-                        };
-                        to_cli.list_append(&kv).await?;
-                    }
+                    let values_in_from = from_cli.list_get(&key.as_str()).await?.0;
+                    let values_in_to = to_cli.list_get(&key.as_str()).await?.0;
+                    for val in values_in_from {
+                        if !values_in_to.contains(&val) {
+                            let kv = storage::KeyValue {
+                                key: key.clone(),
+                                value: val.clone(),
+                            };
+                            to_cli.list_append(&kv).await?;
+                        }
                 }
             }
         }
@@ -312,6 +354,10 @@ impl Keeper {
             .await?;
         self.replicate(primary, new_backup, primary, live_list)
             .await?;
+        self.replicate(old_backup, new_backup, new_backup, live_list)
+            .await?;
+        self.replicate(primary, new_backup, primary, live_list)
+            .await?;
         // self.replicate(old_backup, new_backup, primary, live_list)
         //     .await?;
 
@@ -325,8 +371,14 @@ impl Keeper {
         after_after: usize,
         live_list: &Vec<bool>,
     ) -> TritonFileResult<()> {
-        self.replicate(after, after_after, after, live_list).await?;
-        self.replicate(before, after, before, live_list).await?;
+        self.replicate(after, after_after, after, live_list)
+            .await?;
+        self.replicate(before, after, before, live_list)
+            .await?;
+        self.replicate(after, after_after, after, live_list)
+            .await?;
+        self.replicate(before, after, before, live_list)
+            .await?;
         Ok(())
     }
 
@@ -394,7 +446,6 @@ impl Keeper {
 
         Ok(max_time)
     }
-
 
     async fn living_keepers(&self) -> TritonFileResult<Vec<usize>> {
         let clocks = self.collect_keeper_clock().await?;
@@ -466,9 +517,6 @@ impl Keeper {
         }
     }
 }
-
-
-
 
 // Send a clock() request to client to sync up the clock, if
 // doesn't receive response in wait_for, simply give up. If
