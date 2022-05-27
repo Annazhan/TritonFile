@@ -83,7 +83,7 @@ impl Keeper {
             )
         };
 
-        let fileAttr = from_cli.lookup(&fileRequest, inode, "").await?
+        // let fileAttr = from_cli.lookup(&fileRequest, inode, "").await?
 
         Ok(())
     }

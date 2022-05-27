@@ -23,21 +23,12 @@ pub struct Front {
     binstore: Box<dyn storage::BinStorage>,
     clock: atomic::AtomicU64,
 
-    // FS
-    data_dir: String,
-    next_file_handle: atomic::AtomicU64,
-    direct_io: bool,
-    suid_support: bool,
-
     runtime: tokio::runtime::Runtime,
 }
 
 impl Front {
     pub fn new(
-        binstore: Box<dyn storage::BinStorage>,
-        data_dir: String,
-        direct_io: bool,
-        #[allow(unused_variables)] suid_support: bool,
+        binstore: Box<dyn storage::BinStorage>
     ) -> Front {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .build()
@@ -47,10 +38,6 @@ impl Front {
             Front {
                 binstore,
                 clock: atomic::AtomicU64::new(1),
-                data_dir,
-                next_file_handle: AtomicU64::new(1),
-                direct_io,
-                suid_support,
                 runtime,
             }
         }
@@ -59,10 +46,6 @@ impl Front {
             Front {
                 binstore,
                 clock: atomic::AtomicU64::new(1),
-                data_dir,
-                next_file_handle: atomic::AtomicU64::new(1),
-                direct_io,
-                suid_support: false,
                 runtime,
             }
         }
