@@ -33,7 +33,7 @@ pub struct Front {
 }
 
 impl Front {
-    fn new(
+    pub fn new(
         binstore: Box<dyn storage::BinStorage>,
         data_dir: String,
         direct_io: bool,

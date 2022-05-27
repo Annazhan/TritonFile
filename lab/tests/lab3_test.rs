@@ -1,16 +1,22 @@
+use clap::{crate_version, Arg, Command};
+use front::client_fs::lab::{new_bin_client, serve_back};
+use front::client_fs::{client::new_client, front::Front};
+use fuser::{
+    Filesystem, KernelConfig, MountOption, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory,
+    ReplyEmpty, ReplyEntry, ReplyOpen, ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow,
+    FUSE_ROOT_ID,
+};
+use log::{error, LevelFilter};
 #[allow(unused_imports)]
 use rand::{prelude::SliceRandom, Rng};
+use std::fs::{File, OpenOptions};
+use std::io::{self, BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::{
     sync::{mpsc, Arc},
     time::{Duration, SystemTime},
     vec,
 };
 use tokio::{runtime::Handle, time};
-
-use front::client_fs::client::new_client;
-use front::client_fs::lab::{new_bin_client, serve_back};
-use fuser::Filesystem;
-use fuser::{ReplyCreate, ReplyData, ReplyEmpty, ReplyEntry, ReplyWrite, Request};
 use tribbler::config::KeeperConfig;
 use tribbler::{
     self,
@@ -300,29 +306,120 @@ async fn test_server_setup() -> TritonFileResult<()> {
     let ((back_addr, used_back_addr, unused_back_addr), (kp_addr, used_kp_addr, unused_kp_addr)) =
         generate_addr(6, 4, 4, 3);
     let mut backs = set_up_backs(used_back_addr.clone()).await?;
-    // let mut kps = set_up_kp(back_addr.clone(), kp_addr.clone(), used_kp_addr).await?;
-    // let front = generate_client(back_addr.clone()).await?;
-    // front.sign_up("h8liu").await?;
-    // front.sign_up("fenglu").await?;
-    // front.sign_up("rkapoor").await?;
-    // front.post("h8liu", "Hello, world.", 0).await?;
-    // front.post("h8liu", "Just tribble it.", 2).await?;
-    // front.post("fenglu", "Double tribble.", 0).await?;
-    // front.post("rkapoor", "Triple tribble.", 0).await?;
 
-    // let (remove_addr, handle, shut_sx) = backs.remove(2);
-    // let client = new_client(&remove_addr).await?;
-    // // assert!(client.set(&kv("hello", "hi")).await?);
-    // shut_sx.send(()).await;
-    // let r = handle.await.unwrap();
-    // assert!(r.is_ok());
+    let matches = Command::new("Fuser")
+        .version(crate_version!())
+        .author("Christopher Berner")
+        .arg(
+            Arg::new("data-dir")
+                .long("data-dir")
+                .value_name("DIR")
+                .default_value("/tmp/fuser")
+                .help("Set local directory used to store data")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::new("mount-point")
+                .long("mount-point")
+                .value_name("MOUNT_POINT")
+                .default_value("")
+                .help("Act as a client, and mount FUSE at given path")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::new("direct-io")
+                .long("direct-io")
+                .requires("mount-point")
+                .help("Mount FUSE with direct IO"),
+        )
+        .arg(Arg::new("fsck").long("fsck").help("Run a filesystem check"))
+        .arg(
+            Arg::new("suid")
+                .long("suid")
+                .help("Enable setuid support when run as root"),
+        )
+        .arg(
+            Arg::new("v")
+                .short('v')
+                .multiple_occurrences(true)
+                .help("Sets the level of verbosity"),
+        )
+        .get_matches();
 
-    // match client.get("hello").await {
-    //     Ok(_) => panic!("the server doesn't shut down"),
-    //     Err(_) => (),
-    // }
-    // let _ = shut_down_all(backs, kps);
+    let verbosity: u64 = matches.occurrences_of("v");
+    let log_level = match verbosity {
+        0 => LevelFilter::Error,
+        1 => LevelFilter::Warn,
+        2 => LevelFilter::Info,
+        3 => LevelFilter::Debug,
+        _ => LevelFilter::Trace,
+    };
+    env_logger::builder()
+        .format_timestamp_nanos()
+        .filter_level(log_level)
+        .init();
+
+    let mut options = vec![MountOption::FSName("fuser".to_string())];
+
+    #[cfg(feature = "abi-7-26")]
+    {
+        if matches.is_present("suid") {
+            info!("setuid bit support enabled");
+            options.push(MountOption::Suid);
+        } else {
+            options.push(MountOption::AutoUnmount);
+        }
+    }
+    #[cfg(not(feature = "abi-7-26"))]
+    {
+        options.push(MountOption::AutoUnmount);
+    }
+    if let Ok(enabled) = fuse_allow_other_enabled() {
+        if enabled {
+            options.push(MountOption::AllowOther);
+        }
+    } else {
+        eprintln!("Unable to read /etc/fuse.conf");
+    }
+
+    let data_dir: String = matches.value_of("data-dir").unwrap_or_default().to_string();
+
+    let mountpoint: String = matches
+        .value_of("mount-point")
+        .unwrap_or_default()
+        .to_string();
+
+    let bin_client = new_bin_client(back_addr).await?;
+
+    let result = fuser::mount2(
+        Front::new(
+            bin_client,
+            data_dir,
+            matches.is_present("direct-io"),
+            matches.is_present("suid"),
+        ),
+        mountpoint,
+        &options,
+    );
+    if let Err(e) = result {
+        // Return a special error code for permission denied, which usually indicates that
+        // "user_allow_other" is missing from /etc/fuse.conf
+        if e.kind() == ErrorKind::PermissionDenied {
+            error!("{}", e.to_string());
+            std::process::exit(2);
+        }
+    }
     Ok(())
+}
+
+fn fuse_allow_other_enabled() -> io::Result<bool> {
+    let file = File::open("/etc/fuse.conf")?;
+    for line in BufReader::new(file).lines() {
+        if line?.trim_start().starts_with("user_allow_other") {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 // #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
