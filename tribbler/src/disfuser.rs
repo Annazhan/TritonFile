@@ -1,119 +1,119 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FRequest {
-    #[prost(uint32, tag = "1")]
+    #[prost(uint32, required, tag = "1")]
     pub uid: u32,
-    #[prost(uint32, tag = "2")]
+    #[prost(uint32, required, tag = "2")]
     pub gid: u32,
-    #[prost(uint32, tag = "3")]
+    #[prost(uint32, required, tag = "3")]
     pub pid: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Read {
-    #[prost(message, optional, tag = "1")]
-    pub frequest: ::core::option::Option<FRequest>,
-    #[prost(uint64, tag = "2")]
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
     pub ino: u64,
-    #[prost(uint64, tag = "3")]
+    #[prost(uint64, required, tag = "3")]
     pub fh: u64,
-    #[prost(int64, tag = "4")]
+    #[prost(int64, required, tag = "4")]
     pub offset: i64,
-    #[prost(uint32, tag = "5")]
+    #[prost(uint32, required, tag = "5")]
     pub size: u32,
-    #[prost(int32, tag = "6")]
+    #[prost(int32, required, tag = "6")]
     pub flags: i32,
-    #[prost(uint64, tag = "7")]
-    pub lock_owner: u64,
+    #[prost(uint64, optional, tag = "7")]
+    pub lock_owner: ::core::option::Option<u64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Data {
     /// \[u8\]
-    #[prost(uint32, tag = "1")]
+    #[prost(uint32, required, tag = "1")]
     pub data: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Write {
-    #[prost(message, optional, tag = "1")]
-    pub frequest: ::core::option::Option<FRequest>,
-    #[prost(uint64, tag = "2")]
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
     pub ino: u64,
-    #[prost(uint64, tag = "3")]
+    #[prost(uint64, required, tag = "3")]
     pub fh: u64,
-    #[prost(int64, tag = "4")]
+    #[prost(int64, required, tag = "4")]
     pub offset: i64,
     /// \[u8\]
-    #[prost(string, tag = "5")]
+    #[prost(string, required, tag = "5")]
     pub data: ::prost::alloc::string::String,
-    #[prost(uint32, tag = "6")]
+    #[prost(uint32, required, tag = "6")]
     pub write_flag: u32,
-    #[prost(int32, tag = "7")]
+    #[prost(int32, required, tag = "7")]
     pub flags: i32,
-    #[prost(uint64, tag = "8")]
-    pub lock_owner: u64,
+    #[prost(uint64, optional, tag = "8")]
+    pub lock_owner: ::core::option::Option<u64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct LookUp {
-    #[prost(message, optional, tag = "1")]
-    pub frequest: ::core::option::Option<FRequest>,
-    #[prost(uint64, tag = "2")]
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
     pub parent: u64,
     /// OsStr name = 3;
-    #[prost(string, tag = "3")]
+    #[prost(string, required, tag = "3")]
     pub name: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Create {
-    #[prost(message, optional, tag = "1")]
-    pub frequest: ::core::option::Option<FRequest>,
-    #[prost(uint64, tag = "2")]
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
     pub parent: u64,
     /// OsStr name = 3;
-    #[prost(string, tag = "3")]
+    #[prost(string, required, tag = "3")]
     pub name: ::prost::alloc::string::String,
-    #[prost(uint32, tag = "4")]
+    #[prost(uint32, required, tag = "4")]
     pub mode: u32,
-    #[prost(uint32, tag = "5")]
+    #[prost(uint32, required, tag = "5")]
     pub umask: u32,
-    #[prost(int32, tag = "6")]
+    #[prost(int32, required, tag = "6")]
     pub flags: i32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Unlink {
-    #[prost(message, optional, tag = "1")]
-    pub frequest: ::core::option::Option<FRequest>,
-    #[prost(uint64, tag = "2")]
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
     pub parent: u64,
     /// OsStr name = 3;
-    #[prost(string, tag = "3")]
+    #[prost(string, required, tag = "3")]
     pub name: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Reply {
     /// \[u8\] or fileAttr string
-    #[prost(string, tag = "1")]
+    #[prost(string, required, tag = "1")]
     pub message: ::prost::alloc::string::String,
     /// for the Err when unwrap
-    #[prost(int32, tag = "2")]
+    #[prost(int32, required, tag = "2")]
     pub errcode: i32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct WriteReply {
-    #[prost(uint32, tag = "1")]
+    #[prost(uint32, required, tag = "1")]
     pub size: u32,
-    #[prost(int32, tag = "2")]
+    #[prost(int32, required, tag = "2")]
     pub errcode: i32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CreateReply {
-    #[prost(string, tag = "1")]
+    #[prost(string, required, tag = "1")]
     pub file_attr: ::prost::alloc::string::String,
-    #[prost(uint64, tag = "2")]
+    #[prost(uint64, required, tag = "2")]
     pub fh: u64,
-    #[prost(int32, tag = "3")]
+    #[prost(int32, required, tag = "3")]
     pub errcode: i32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UnlinkReply {
-    #[prost(int32, tag = "1")]
+    #[prost(int32, required, tag = "1")]
     pub errcode: i32,
 }
 #[doc = r" Generated client implementations."]

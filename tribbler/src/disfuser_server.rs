@@ -75,9 +75,9 @@ impl Disfuser for DisfuserServer {
         let r_inner = request.into_inner();
 
         let request = FileRequest {
-            uid: r_inner.frequest.clone().unwrap().uid,
-            gid: r_inner.frequest.clone().unwrap().gid,
-            pid: r_inner.frequest.clone().unwrap().pid,
+            uid: r_inner.frequest.clone().uid,
+            gid: r_inner.frequest.clone().gid,
+            pid: r_inner.frequest.clone().pid,
         };
 
         let result = self
@@ -89,7 +89,7 @@ impl Disfuser for DisfuserServer {
                 r_inner.offset,
                 r_inner.size,
                 r_inner.flags,
-                Some(r_inner.lock_owner),
+                r_inner.lock_owner,
             )
             .await;
         let mut reply = Vec::new();
@@ -156,16 +156,16 @@ impl Disfuser for DisfuserServer {
                     let v = value.unwrap();
                     r_data.push(v.data);
                     file_request = FileRequest {
-                        uid: v.frequest.clone().unwrap().uid,
-                        gid: v.frequest.clone().unwrap().gid,
-                        pid: v.frequest.clone().unwrap().pid,
+                        uid: v.frequest.clone().uid,
+                        gid: v.frequest.clone().gid,
+                        pid: v.frequest.clone().pid,
                     };
                     inode = v.ino;
                     file_handler = v.fh;
                     offset = v.offset;
                     _write_flags = v.write_flag;
                     flags = v.flags;
-                    _lock_owner = Some(v.lock_owner);
+                    _lock_owner = v.lock_owner;
                 }
                 None => {}
             }
@@ -202,9 +202,9 @@ impl Disfuser for DisfuserServer {
     ) -> Result<tonic::Response<Reply>, tonic::Status> {
         let mut request_inner = request.into_inner();
         let mut file_request = FileRequest {
-            uid: request_inner.frequest.clone().unwrap().uid,
-            gid: request_inner.frequest.clone().unwrap().gid,
-            pid: request_inner.frequest.clone().unwrap().pid,
+            uid: request_inner.frequest.clone().uid,
+            gid: request_inner.frequest.clone().gid,
+            pid: request_inner.frequest.clone().pid,
         };
         let mut osstring = OsString::new();
         osstring.push(request_inner.name);
@@ -229,9 +229,9 @@ impl Disfuser for DisfuserServer {
     ) -> Result<tonic::Response<CreateReply>, tonic::Status> {
         let request_inner = request.into_inner();
         let mut file_request = FileRequest {
-            uid: request_inner.frequest.clone().unwrap().uid,
-            gid: request_inner.frequest.clone().unwrap().gid,
-            pid: request_inner.frequest.clone().unwrap().pid,
+            uid: request_inner.frequest.clone().uid,
+            gid: request_inner.frequest.clone().gid,
+            pid: request_inner.frequest.clone().pid,
         };
         let mut osstring = OsString::new();
         osstring.push(request_inner.name);
@@ -262,9 +262,9 @@ impl Disfuser for DisfuserServer {
     ) -> Result<tonic::Response<UnlinkReply>, tonic::Status> {
         let request_inner = request.into_inner();
         let mut file_request = FileRequest {
-            uid: request_inner.frequest.clone().unwrap().uid,
-            gid: request_inner.frequest.clone().unwrap().gid,
-            pid: request_inner.frequest.clone().unwrap().pid,
+            uid: request_inner.frequest.clone().uid,
+            gid: request_inner.frequest.clone().gid,
+            pid: request_inner.frequest.clone().pid,
         };
         let mut osstring = OsString::new();
         osstring.push(request_inner.name);

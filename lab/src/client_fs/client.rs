@@ -78,17 +78,14 @@ fn write_requests_iter(
         start = i * slice_size;
         end = min(start + slice_size, data_len);
         let element = Write {
-            frequest: Some(FReq),
+            frequest: FReq,
             ino: inode,
             fh,
             offset,
             data: data_string.clone()[start..end].to_string(),
             write_flag: _write_flags,
             flags,
-            lock_owner: match _lock_owner {
-                Some(value) => value,
-                None => DEFAULT_LOCK_OWNER,
-            },
+            lock_owner: _lock_owner,
         };
         vec.push(element);
     }
@@ -117,16 +114,13 @@ impl ServerFileSystem for StorageClient {
 
         let mut stream = client
             .read(Read {
-                frequest: Some(FReq),
+                frequest: FReq,
                 ino: inode,
                 fh,
                 offset,
                 size,
                 flags: _flags,
-                lock_owner: match _lock_owner {
-                    Some(value) => value,
-                    None => DEFAULT_LOCK_OWNER,
-                },
+                lock_owner: _lock_owner,
             })
             .await
             .unwrap()
@@ -203,7 +197,7 @@ impl ServerFileSystem for StorageClient {
         let mut client = self.disfuser_client().await;
         let result = client
             .lookup(LookUp {
-                frequest: Some(freq),
+                frequest: freq,
                 parent: parent,
                 name: name_string,
             })
@@ -237,7 +231,7 @@ impl ServerFileSystem for StorageClient {
         let mut client = self.disfuser_client().await;
         let result = client
             .create(Create {
-                frequest: Some(freq),
+                frequest: freq,
                 parent: parent,
                 name: name_string,
                 mode: mode,
@@ -277,7 +271,7 @@ impl ServerFileSystem for StorageClient {
         let mut client = self.disfuser_client().await;
         let result = client
             .unlink(Unlink {
-                frequest: Some(freq),
+                frequest: freq,
                 parent: parent,
                 name: name_string,
             })
