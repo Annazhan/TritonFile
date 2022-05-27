@@ -200,7 +200,7 @@ impl RemoteFileSystem {
         }
 
         if !fs::metadata(format!("tmp/{}", num)).is_ok() {
-            fs::create_dir(format!("tmp/{}", num)).unwrap();
+            fs::create_dir_all(format!("tmp/{}", num)).unwrap();
         }
 
         RemoteFileSystem {
