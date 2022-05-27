@@ -5,6 +5,7 @@ use bson::Bson;
 use fuser::Reply;
 use fuser::ReplyData;
 use fuser::Session;
+use fuser::TimeOrNow;
 use libc::c_int;
 use log::error;
 use log::info;
@@ -18,6 +19,7 @@ use std::io::SeekFrom;
 use std::io::Write;
 use std::os::unix::prelude::FileExt;
 use std::os::unix::prelude::OsStrExt;
+use std::time::SystemTime;
 use std::{collections::HashMap, ffi::OsStr, fs, io::ErrorKind, sync::RwLock};
 use tokio::io::BufStream;
 use tokio_stream::{Stream, StreamExt};
@@ -159,6 +161,85 @@ pub trait ServerFileSystem {
         _umask: u32,
         flags: i32,
     ) -> TritonFileResult<(Option<(FileAttr, u64)>, c_int)>;
+
+    async fn getattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)>;
+
+    async fn open(
+        &self,
+        _req: &FileRequest,
+        _ino: u64,
+        _flags: i32,
+    ) -> TritonFileResult<(Option<u64>, c_int)>;
+
+    async fn release(
+        &self,
+        _req: &FileRequest,
+        _ino: u64,
+        _fh: u64,
+        _flags: i32,
+        _lock_owner: Option<u64>,
+        _flush: bool,
+    ) -> TritonFileResult<(c_int)>;
+
+    async fn setxattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+        name: &OsStr,
+        _value: &[u8],
+        flags: i32,
+        position: u32,
+    ) -> TritonFileResult<(c_int)>;
+
+    //reply Vec<u8> as string
+    async fn getxattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+        name: &OsStr,
+        size: u32,
+    ) -> TritonFileResult<(Option<(String, u32)>, c_int)>;
+
+    async fn listxattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+        size: u32,
+    ) -> TritonFileResult<(Option<(String, u32)>, c_int)>;
+
+    async fn access(&self, _req: &FileRequest, ino: u64, mask: i32) -> TritonFileResult<(c_int)>;
+
+    async fn rename(
+        &self,
+        _req: &FileRequest,
+        parent: u64,
+        name: &OsStr,
+        newparent: u64,
+        newname: &OsStr,
+        flags: u32,
+    ) -> TritonFileResult<(c_int)>;
+
+    async fn setattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+        mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        _atime: Option<TimeOrNow>,
+        _mtime: Option<TimeOrNow>,
+        _ctime: Option<SystemTime>,
+        fh: Option<u64>,
+        _crtime: Option<SystemTime>,
+        _chgtime: Option<SystemTime>,
+        _bkuptime: Option<SystemTime>,
+        flags: Option<u32>,
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)>;
 }
 
 #[async_trait]
