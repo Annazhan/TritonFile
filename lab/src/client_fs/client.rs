@@ -3,14 +3,19 @@ use std::ffi::OsStr;
 
 use async_trait::async_trait;
 use fuser::FileAttr;
+use fuser::TimeOrNow;
 use libc::c_int;
+use std::time::SystemTime;
 use tokio::sync::Mutex;
 use tokio_stream::Stream;
 use tokio_stream::StreamExt;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Code;
 use tribbler::disfuser::disfuser_client::DisfuserClient;
-use tribbler::disfuser::{Create, FRequest, LookUp, Read, Unlink, Write};
+use tribbler::disfuser::{
+    Access, Create, FRequest, Getattr, Getxattr, Listxattr, LookUp, Open, Read, Release, Rename,
+    Setxattr, Unlink, Write,
+};
 use tribbler::disfuser_server::slice_size;
 use tribbler::error::{TritonFileResult, SUCCESS};
 use tribbler::rpc;
@@ -249,10 +254,6 @@ impl ServerFileSystem for StorageClient {
         }
         let fileattr = serde_json::from_str::<FileAttr>(&attr).unwrap();
         Ok((Some((fileattr, fh)), SUCCESS))
-        // receive string -> tuple
-        // tuple -> fileattr, u64
-        // let attr, fh = result.into_inner().attr, result.into_inner().fh;
-        // Ok((attr, fh))
     }
 
     async fn unlink(
@@ -281,6 +282,297 @@ impl ServerFileSystem for StorageClient {
             return Ok(error_code);
         }
         Ok(SUCCESS)
+    }
+
+    async fn getattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
+        let freq = FRequest {
+            uid: _req.uid,
+            gid: _req.gid,
+            pid: _req.pid,
+        };
+
+        let mut client = self.disfuser_client().await;
+        let result = client
+            .getattr(Getattr {
+                frequest: freq,
+                ino: ino,
+            })
+            .await?;
+        let getattrReply = result.into_inner();
+        let attr = getattrReply.file_attr;
+        let error_code = getattrReply.errcode;
+        if error_code != SUCCESS {
+            return Ok((None, error_code));
+        }
+        let fileattr = serde_json::from_str::<FileAttr>(&attr).unwrap();
+        Ok((Some(fileattr), SUCCESS))
+    }
+
+    async fn open(
+        &self,
+        _req: &FileRequest,
+        _ino: u64,
+        _flags: i32,
+    ) -> TritonFileResult<(Option<(u64, u32)>, c_int)> {
+        let freq = FRequest {
+            uid: _req.uid,
+            gid: _req.gid,
+            pid: _req.pid,
+        };
+
+        let mut client = self.disfuser_client().await;
+        let result = client
+            .open(Open {
+                frequest: freq,
+                ino: _ino,
+                flags: _flags,
+            })
+            .await?;
+        let openReply = result.into_inner();
+        let fh = openReply.fh;
+        let open_flag = openReply.openflag;
+        let error_code = openReply.errcode;
+        if error_code != SUCCESS {
+            return Ok((None, error_code));
+        }
+        Ok((Some((fh, open_flag)), SUCCESS))
+    }
+
+    async fn release(
+        &self,
+        _req: &FileRequest,
+        _ino: u64,
+        _fh: u64,
+        _flags: i32,
+        _lock_owner: Option<u64>,
+        _flush: bool,
+    ) -> TritonFileResult<(c_int)> {
+        let freq = FRequest {
+            uid: _req.uid,
+            gid: _req.gid,
+            pid: _req.pid,
+        };
+
+        let mut client = self.disfuser_client().await;
+        let result = client
+            .release(Release {
+                frequest: freq,
+                ino: _ino,
+                fh: _fh,
+                flags: _flags,
+                lock_owner: _lock_owner,
+                flush: _flush,
+            })
+            .await?;
+        let error_code = result.into_inner().errcode;
+        if error_code != SUCCESS {
+            return Ok(error_code);
+        }
+        Ok(SUCCESS)
+    }
+
+    async fn setxattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+        name: &OsStr,
+        _value: &[u8],
+        flags: i32,
+        position: u32,
+    ) -> TritonFileResult<(c_int)> {
+        let freq = FRequest {
+            uid: _req.uid,
+            gid: _req.gid,
+            pid: _req.pid,
+        };
+
+        let name_string = name.to_str().unwrap().to_string();
+        let mut client = self.disfuser_client().await;
+        let value_string = std::str::from_utf8(_value).unwrap().to_string();
+        let result = client
+            .setxattr(Setxattr {
+                frequest: freq,
+                ino: ino,
+                name: name_string,
+                value: value_string,
+                flags: flags,
+                position: position,
+            })
+            .await?;
+        let error_code = result.into_inner().errcode;
+        if error_code != SUCCESS {
+            return Ok(error_code);
+        }
+        Ok(SUCCESS)
+    }
+
+    //reply Vec<u8> as string
+    async fn getxattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+        name: &OsStr,
+        size: u32,
+    ) -> TritonFileResult<(Option<(String, u32)>, c_int)> {
+        let freq = FRequest {
+            uid: _req.uid,
+            gid: _req.gid,
+            pid: _req.pid,
+        };
+
+        let name_string = name.to_str().unwrap().to_string();
+        let mut client = self.disfuser_client().await;
+        let result = client
+            .getxattr(Getxattr {
+                frequest: freq,
+                ino: ino,
+                name: name_string,
+                size: size,
+            })
+            .await?;
+
+        let getxattrReply = result.into_inner();
+        let data = getxattrReply.data;
+        let size = getxattrReply.size;
+        let error_code = getxattrReply.errcode;
+        if error_code != SUCCESS {
+            return Ok((None, error_code));
+        }
+        Ok((Some((data, size)), SUCCESS))
+    }
+
+    async fn listxattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+        size: u32,
+    ) -> TritonFileResult<(Option<(String, u32)>, c_int)> {
+        let freq = FRequest {
+            uid: _req.uid,
+            gid: _req.gid,
+            pid: _req.pid,
+        };
+
+        let mut client = self.disfuser_client().await;
+        let result = client
+            .listxattr(Listxattr {
+                frequest: freq,
+                ino: ino,
+                size: size,
+            })
+            .await?;
+        let listxattrReply = result.into_inner();
+        let data = listxattrReply.data;
+        let size = listxattrReply.size;
+        let error_code = listxattrReply.errcode;
+        if error_code != SUCCESS {
+            return Ok((None, error_code));
+        }
+        Ok((Some((data, size)), SUCCESS))
+    }
+
+    async fn access(&self, _req: &FileRequest, ino: u64, mask: i32) -> TritonFileResult<(c_int)> {
+        let freq = FRequest {
+            uid: _req.uid,
+            gid: _req.gid,
+            pid: _req.pid,
+        };
+        let mut client = self.disfuser_client().await;
+        let result = client
+            .access(Access {
+                frequest: freq,
+                ino: ino,
+                mask: mask,
+            })
+            .await?;
+        let error_code = result.into_inner().errcode;
+        if error_code != SUCCESS {
+            return Ok(error_code);
+        }
+        Ok(SUCCESS)
+    }
+
+    async fn rename(
+        &self,
+        _req: &FileRequest,
+        parent: u64,
+        name: &OsStr,
+        newparent: u64,
+        newname: &OsStr,
+        flags: u32,
+    ) -> TritonFileResult<(c_int)> {
+        let freq = FRequest {
+            uid: _req.uid,
+            gid: _req.gid,
+            pid: _req.pid,
+        };
+        let name_string = name.to_str().unwrap().to_string();
+        let newname_string = newname.to_str().unwrap().to_string();
+        let mut client = self.disfuser_client().await;
+        let result = client
+            .rename(Rename {
+                frequest: freq,
+                parent: parent,
+                name: name_string,
+                newparent: newparent,
+                newname: newname_string,
+                flags: flags,
+            })
+            .await?;
+        let error_code = result.into_inner().errcode;
+        if error_code != SUCCESS {
+            return Ok(error_code);
+        }
+        Ok(SUCCESS)
+    }
+
+    async fn setattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+        mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        _atime: Option<TimeOrNow>,
+        _mtime: Option<TimeOrNow>,
+        _ctime: Option<SystemTime>,
+        fh: Option<u64>,
+        _crtime: Option<SystemTime>,
+        _chgtime: Option<SystemTime>,
+        _bkuptime: Option<SystemTime>,
+        flags: Option<u32>,
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
+        let freq = FRequest {
+            uid: _req.uid,
+            gid: _req.gid,
+            pid: _req.pid,
+        };
+        let mut client = self.disfuser_client().await;
+        let result = client
+            .setattr(Setattr {
+                frequest: freq,
+                ino: ino,
+                mode: mode,
+                uid: uid,
+                gid: gid,
+                size: size,
+                fh: fh,
+                flags: flags,
+            })
+            .await?;
+        let setattrReply = result.into_inner();
+        let error_code = setattrReply.errcode;
+        if error_code != SUCCESS {
+            return Ok((None, error_code));
+        }
+        let received_attr = setattrReply.file_attr;
+        let fileattr = serde_json::from_str::<FileAttr>(&received_attr).unwrap();
+        Ok((Some(fileattr), SUCCESS))
     }
 }
 

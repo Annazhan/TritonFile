@@ -1,6 +1,7 @@
 use super::ops::{union, ListOp, LogOp, OpKind};
 use async_trait::async_trait;
 use fuser::FileAttr;
+use fuser::TimeOrNow;
 use libc::c_int;
 use log::info;
 use serde::de::DeserializeOwned;
@@ -11,6 +12,7 @@ use std::ffi::OsStr;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::sync::atomic;
+use std::time::SystemTime;
 use tribbler::colon;
 use tribbler::error::{TritonFileError, TritonFileResult};
 use tribbler::storage;
@@ -614,6 +616,206 @@ impl ServerFileSystem for ReliableStore {
                 Ok(_) => (),
             }
             match backup.create(req, parent, name, mode, _umask, flags).await {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
+            }
+        }
+    }
+    async fn getattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
+        loop {
+            let primary = self.primary_store().await?;
+            match primary.getattr(_req, ino).await {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
+            }
+        }
+    }
+
+    async fn open(
+        &self,
+        _req: &FileRequest,
+        _ino: u64,
+        _flags: i32,
+    ) -> TritonFileResult<(Option<(u64, u32)>, c_int)> {
+        loop {
+            let primary = self.primary_store().await?;
+            match primary.open(_req, _ino, _flags).await {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
+            }
+        }
+    }
+
+    async fn release(
+        &self,
+        _req: &FileRequest,
+        _ino: u64,
+        _fh: u64,
+        _flags: i32,
+        _lock_owner: Option<u64>,
+        _flush: bool,
+    ) -> TritonFileResult<(c_int)> {
+        loop {
+            let primary = self.primary_store().await?;
+            let backup = self.backup_store().await?;
+            match primary
+                .release(_req, _ino, _fh, _flags, _lock_owner, _flush)
+                .await
+            {
+                Err(_) => continue,
+                Ok(_) => (),
+            }
+            match backup
+                .release(_req, _ino, _fh, _flags, _lock_owner, _flush)
+                .await
+            {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
+            }
+        }
+    }
+
+    async fn setxattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+        name: &OsStr,
+        _value: &[u8],
+        flags: i32,
+        position: u32,
+    ) -> TritonFileResult<(c_int)> {
+        loop {
+            let primary = self.primary_store().await?;
+            let backup = self.backup_store().await?;
+            match primary
+                .setxattr(_req, ino, name, _value, flags, position)
+                .await
+            {
+                Err(_) => continue,
+                Ok(_) => (),
+            }
+            match backup
+                .setxattr(_req, ino, name, _value, flags, position)
+                .await
+            {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
+            }
+        }
+    }
+
+    //reply Vec<u8> as string
+    async fn getxattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+        name: &OsStr,
+        size: u32,
+    ) -> TritonFileResult<(Option<(String, u32)>, c_int)> {
+        loop {
+            let primary = self.primary_store().await?;
+            match primary.getxattr(_req, ino, name, size).await {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
+            }
+        }
+    }
+
+    async fn listxattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+        size: u32,
+    ) -> TritonFileResult<(Option<(String, u32)>, c_int)> {
+        loop {
+            let primary = self.primary_store().await?;
+            match primary.listxattr(_req, ino, size).await {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
+            }
+        }
+    }
+
+    async fn access(&self, _req: &FileRequest, ino: u64, mask: i32) -> TritonFileResult<(c_int)> {
+        loop {
+            let primary = self.primary_store().await?;
+            match primary.access(_req, ino, mask).await {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
+            }
+        }
+    }
+
+    async fn rename(
+        &self,
+        _req: &FileRequest,
+        parent: u64,
+        name: &OsStr,
+        newparent: u64,
+        newname: &OsStr,
+        flags: u32,
+    ) -> TritonFileResult<(c_int)> {
+        loop {
+            let primary = self.primary_store().await?;
+            let backup = self.backup_store().await?;
+            match primary
+                .rename(_req, parent, name, newparent, newname, flags)
+                .await
+            {
+                Err(_) => continue,
+                Ok(_) => (),
+            }
+            match backup
+                .rename(_req, parent, name, newparent, newname, flags)
+                .await
+            {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
+            }
+        }
+    }
+
+    async fn setattr(
+        &self,
+        _req: &FileRequest,
+        ino: u64,
+        mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        _atime: Option<TimeOrNow>,
+        _mtime: Option<TimeOrNow>,
+        _ctime: Option<SystemTime>,
+        fh: Option<u64>,
+        _crtime: Option<SystemTime>,
+        _chgtime: Option<SystemTime>,
+        _bkuptime: Option<SystemTime>,
+        flags: Option<u32>,
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
+        loop {
+            let primary = self.primary_store().await?;
+            let backup = self.backup_store().await?;
+            match primary
+                .setattr(
+                    _req, ino, mode, uid, gid, size, _atime, _mtime, _ctime, fh, _crtime, _chgtime,
+                    _bkuptime, flags,
+                )
+                .await
+            {
+                Err(_) => continue,
+                Ok(_) => (),
+            }
+            match backup
+                .setattr(
+                    _req, ino, mode, uid, gid, size, _atime, _mtime, _ctime, fh, _crtime, _chgtime,
+                    _bkuptime, flags,
+                )
+                .await
+            {
                 Err(_) => continue,
                 Ok(res) => return Ok(res),
             }

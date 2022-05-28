@@ -27,9 +27,7 @@ pub struct Front {
 }
 
 impl Front {
-    pub fn new(
-        binstore: Box<dyn storage::BinStorage>
-    ) -> Front {
+    pub fn new(binstore: Box<dyn storage::BinStorage>) -> Front {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .build()
             .unwrap();
@@ -219,7 +217,6 @@ impl Filesystem for Front {
         flags: i32,
         reply: ReplyCreate,
     ) {
-        // ReliableStore
         let FReq = &FileRequest {
             uid: req.uid(),
             gid: req.gid(),
@@ -275,6 +272,72 @@ impl Filesystem for Front {
                             reply.error(error_code)
                         } else {
                             reply.ok();
+                        }
+                    }
+                    Err(e) => reply.error(libc::ENETDOWN),
+                }
+            }
+            Err(e) => reply.error(libc::ENETDOWN),
+        }
+    }
+
+    fn getattr(&mut self, _req: &Request, inode: u64, reply: ReplyAttr) {
+        let FReq = &FileRequest {
+            uid: req.uid(),
+            gid: req.gid(),
+            pid: req.pid(),
+        };
+        let gid = req.gid().to_string().clone();
+        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_res = self.runtime.block_on(bin_pre);
+
+        match bin_res {
+            Ok(mut bin) => {
+                let bin_create_pre = bin.getattr(FReq, ino);
+
+                let res = self.runtime.block_on(bin_create_pre);
+
+                match res {
+                    Ok(res_info) => {
+                        let (attrs_op, error_code) = res_info;
+                        if error_code != SUCCESS {
+                            reply.error(error_code);
+                        } else {
+                            let attr = attrs_op.unwrap();
+                            reply.attr(&Duration::new(0, 0), &attrs.into());
+                        }
+                    }
+                    Err(e) => reply.error(libc::ENETDOWN),
+                }
+            }
+            Err(e) => reply.error(libc::ENETDOWN),
+        }
+    }
+
+    fn open(&mut self, req: &Request, inode: u64, flags: i32, reply: ReplyOpen) {
+        let FReq = &FileRequest {
+            uid: req.uid(),
+            gid: req.gid(),
+            pid: req.pid(),
+        };
+        let gid = req.gid().to_string().clone();
+        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_res = self.runtime.block_on(bin_pre);
+
+        match bin_res {
+            Ok(mut bin) => {
+                let bin_create_pre = bin.open(FReq, inode, flags);
+
+                let res = self.runtime.block_on(bin_create_pre);
+
+                match res {
+                    Ok(res_info) => {
+                        let (attrs_op, error_code) = res_info;
+                        if error_code != SUCCESS {
+                            reply.error(error_code);
+                        } else {
+                            let (fh, open_flags) = attrs_op.unwrap();
+                            reply.opened(fh, open_flags);
                         }
                     }
                     Err(e) => reply.error(libc::ENETDOWN),

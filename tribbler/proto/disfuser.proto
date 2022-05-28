@@ -59,6 +59,81 @@ message Unlink {
     required string name = 3;
 }
 
+message Getattr {
+    required FRequest frequest = 1;
+    required uint64 ino = 2;
+}
+
+message Open{
+    required FRequest frequest = 1;
+    required uint64 ino = 2;
+    required int32 flags = 3;
+}
+
+message Release{
+    required FRequest frequest = 1;
+    required uint64 ino = 2;
+    required uint64 fh = 3; 
+    required int32 flags = 4; 
+    optional uint64 lock_owner = 5; 
+    required bool flush = 6; 
+}
+
+message Setxattr{
+    required FRequest frequest = 1;
+    required uint64 ino = 2;
+    required string name = 3; 
+    required string value = 4; 
+    required int32 flags = 5; 
+    required uint32 position = 6;
+}
+
+message Getxattr{
+    required FRequest frequest = 1;
+    required uint64 ino = 2;
+    required string name = 3; 
+    required uint32 size = 4;
+}
+
+message Listxattr{
+    required FRequest frequest = 1;
+    required uint64 ino = 2;
+    required uint32 size = 3;
+}
+
+message Access{
+    required FRequest frequest = 1;
+    required uint64 ino = 2;
+    required int32 mask = 3;
+}
+
+message Rename{
+    required FRequest frequest = 1;
+    required uint64 parent = 2;
+    required string name = 3; 
+    required uint64 newparent = 4; 
+    required string newname = 5; 
+    required uint32 flags = 6;
+}
+
+message Setattr{
+    required FRequest frequest = 1;
+    required uint64 ino = 2;
+    optional uint32 mode = 3; 
+    optional uint32 uid = 4; 
+    optional uint32 gid = 5; 
+    optional uint64 size = 6; 
+    optional uint64 fh = 7;     
+    required uint32 flags = 8;
+    
+    // optional string atime = 9; 
+    // optional string mtime = 10; 
+    // optional string ctime = 11; 
+    // optional string crtime = 12; 
+    // optional string chgtime = 13; 
+    // optional string bkuptime = 14; 
+}
+
 message Reply {
     required string message = 1; // [u8] or fileAttr string
     required int32 errcode = 2; // for the Err when unwrap
@@ -79,10 +154,63 @@ message unlinkReply {
     required int32 errcode = 1;
 }
 
+message getattrReply {
+    required string fileAttr = 1;
+    required int32 errcode = 2;
+}
+
+message openReply {
+    required uint64 fh = 1;
+    required uint32 openflag = 2;
+    required int32 errcode = 3;
+}
+
+message releaseReply {
+    required int32 errcode = 1;
+}
+
+message setxattrReply {
+    required int32 errcode = 1;
+}
+
+message getxattrReply {
+    required string data = 1; 
+    required uint32 size = 2; 
+    required int32 errcode = 3;
+}
+
+message listxattrReply {
+    required string data = 1; 
+    required uint32 size = 2; 
+    required int32 errcode = 3;
+}
+
+message accessReply {
+    required int32 errcode = 1;
+}
+
+message renameReply {
+    required int32 errcode = 1;
+}
+
+message setattrReply {
+    required string fileAttr = 1;
+    required int32 errcode = 2;
+}
+
 service disfuser {
     rpc read(Read) returns (stream Reply) {}
     rpc write(stream Write) returns (writeReply) {}
     rpc lookup(LookUp) returns (Reply) {} 
     rpc create(Create) returns (createReply) {} 
     rpc unlink(Unlink) returns (unlinkReply) {} 
+    rpc getattr(Getattr) returns (getattrReply) {} 
+    rpc open(Open) returns (openReply) {} 
+    rpc release(Release) returns (releaseReply) {} 
+    rpc setxattr(Setxattr) returns (setxattrReply) {} 
+    rpc getxattr(Getxattr) returns (getxattrReply) {} 
+    rpc listxattr(Listxattr) returns (listxattrReply) {} 
+    rpc access(Access) returns (accessReply) {} 
+    rpc rename(Rename) returns (renameReply) {} 
+    rpc setattr(Setattr) returns (setattrReply) {} 
 }
