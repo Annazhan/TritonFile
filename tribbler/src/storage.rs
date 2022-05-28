@@ -7,6 +7,7 @@ use fuser::Reply;
 use fuser::ReplyData;
 use fuser::Session;
 use fuser::TimeOrNow;
+use fuser::TimeOrNow::Now;
 use libc::c_int;
 use log::error;
 use log::info;
@@ -32,7 +33,10 @@ use crate::error::SUCCESS;
 use crate::simple;
 use crate::simple::check_access;
 use crate::simple::clear_suid_sgid;
+use crate::simple::get_groups;
+use crate::simple::time_from_system_time;
 use crate::simple::time_now;
+use crate::simple::xattr_access_check;
 use crate::simple::FileKind;
 use crate::simple::InodeAttributes;
 use crate::simple::SimpleFS;
@@ -698,86 +702,352 @@ impl ServerFileSystem for RemoteFileSystem {
                     attr.open_file_handles += 1;
                     fs.write_inode(&attr);
                     let open_flags = if fs.direct_io { FOPEN_DIRECT_IO } else { 0 };
-                    reply.opened(fs.allocate_next_file_handle(read, write), open_flags);
+                    return Ok((
+                        Some((fs.allocate_next_file_handle(read, write), open_flags)),
+                        SUCCESS,
+                    ));
                 } else {
-                    reply.error(libc::EACCES);
+                    return Ok((None, libc::EACCES));
                 }
-                return;
             }
-            Err(error_code) => reply.error(error_code),
+            Err(error_code) => return Ok((None, error_code)),
         }
     }
 
     async fn release(
         &self,
         _req: &FileRequest,
-        _ino: u64,
+        inode: u64,
         _fh: u64,
         _flags: i32,
         _lock_owner: Option<u64>,
         _flush: bool,
     ) -> TritonFileResult<(c_int)> {
-        todo!()
+        let fs = &self.fs;
+        if let Ok(mut attrs) = fs.get_inode(inode) {
+            attrs.open_file_handles -= 1;
+        }
+        return Ok(SUCCESS);
     }
 
     async fn setxattr(
         &self,
-        _req: &FileRequest,
-        ino: u64,
-        name: &OsStr,
-        _value: &[u8],
+        request: &FileRequest,
+        inode: u64,
+        key: &OsStr,
+        value: &[u8],
         flags: i32,
         position: u32,
     ) -> TritonFileResult<(c_int)> {
-        todo!()
+        let fs = &self.fs;
+        if let Ok(mut attrs) = fs.get_inode(inode) {
+            if let Err(error) = xattr_access_check(key.as_bytes(), libc::W_OK, &attrs, request) {
+                return Ok(error);
+            }
+
+            attrs.xattrs.insert(key.as_bytes().to_vec(), value.to_vec());
+            attrs.last_metadata_changed = time_now();
+            fs.write_inode(&attrs);
+            return Ok(SUCCESS);
+        } else {
+            return Ok(libc::EBADF);
+        }
     }
 
     //reply Vec<u8> as string
     async fn getxattr(
         &self,
-        _req: &FileRequest,
-        ino: u64,
-        name: &OsStr,
+        request: &FileRequest,
+        inode: u64,
+        key: &OsStr,
         size: u32,
     ) -> TritonFileResult<(Option<(String, u32)>, c_int)> {
-        todo!()
+        let fs = &self.fs;
+
+        if let Ok(attrs) = fs.get_inode(inode) {
+            if let Err(error) = xattr_access_check(key.as_bytes(), libc::R_OK, &attrs, request) {
+                return Ok((None, error));
+            }
+
+            /// check size to get usize
+            if let Some(data) = attrs.xattrs.get(key.as_bytes()) {
+                if size == 0 {
+                    return Ok((
+                        Some((serde_json::to_string("").unwrap(), data.len() as u32)),
+                        SUCCESS,
+                    ));
+                } else if data.len() <= size as usize {
+                    return Ok((
+                        Some((serde_json::to_string(data).unwrap(), data.len() as u32)),
+                        SUCCESS,
+                    ));
+                } else {
+                    return Ok((None, libc::ERANGE));
+                }
+            } else {
+                #[cfg(target_os = "linux")]
+                return Ok((None, libc::ENODATA));
+                #[cfg(not(target_os = "linux"))]
+                return Ok((None, libc::ENODATA));
+            }
+        } else {
+            return Ok((None, libc::EBADF));
+        }
     }
 
     async fn listxattr(
         &self,
         _req: &FileRequest,
-        ino: u64,
+        inode: u64,
         size: u32,
     ) -> TritonFileResult<(Option<(String, u32)>, c_int)> {
-        todo!()
+        let fs = &self.fs;
+        if let Ok(attrs) = fs.get_inode(inode) {
+            let mut bytes = vec![];
+            // Convert to concatenated null-terminated strings
+            for key in attrs.xattrs.keys() {
+                bytes.extend(key);
+                bytes.push(0);
+            }
+            if size == 0 {
+                return Ok((
+                    Some((serde_json::to_string("").unwrap(), bytes.len() as u32)),
+                    SUCCESS,
+                ));
+            } else if bytes.len() <= size as usize {
+                return Ok((
+                    Some((serde_json::to_string(&bytes).unwrap(), bytes.len() as u32)),
+                    SUCCESS,
+                ));
+            } else {
+                return Ok((None, libc::ERANGE));
+            }
+        } else {
+            return Ok((None, libc::EBADF));
+        }
     }
 
-    async fn access(&self, _req: &FileRequest, ino: u64, mask: i32) -> TritonFileResult<(c_int)> {
-        todo!()
+    async fn access(&self, req: &FileRequest, inode: u64, mask: i32) -> TritonFileResult<(c_int)> {
+        let fs = &self.fs;
+
+        info!("access() called with {:?} {:?}", inode, mask);
+        match fs.get_inode(inode) {
+            Ok(attr) => {
+                if check_access(attr.uid, attr.gid, attr.mode, req.uid, req.gid, mask) {
+                    return Ok(SUCCESS);
+                } else {
+                    return Ok(libc::EACCES);
+                }
+            }
+            Err(error_code) => return Ok(error_code),
+        }
     }
 
     async fn rename(
         &self,
-        _req: &FileRequest,
+        req: &FileRequest,
         parent: u64,
         name: &OsStr,
-        newparent: u64,
-        newname: &OsStr,
+        new_parent: u64,
+        new_name: &OsStr,
         flags: u32,
     ) -> TritonFileResult<(c_int)> {
-        todo!()
+        let fs = &self.fs;
+
+        let mut inode_attrs = match fs.lookup_name(parent, name) {
+            Ok(attrs) => attrs,
+            Err(error_code) => {
+                return Ok(error_code);
+            }
+        };
+
+        let mut parent_attrs = match fs.get_inode(parent) {
+            Ok(attrs) => attrs,
+            Err(error_code) => {
+                return Ok(error_code);
+            }
+        };
+
+        if !check_access(
+            parent_attrs.uid,
+            parent_attrs.gid,
+            parent_attrs.mode,
+            req.uid,
+            req.gid,
+            libc::W_OK,
+        ) {
+            return Ok(libc::EACCES);
+        }
+
+        // "Sticky bit" handling
+        if parent_attrs.mode & libc::S_ISVTX as u16 != 0
+            && req.uid != 0
+            && req.uid != parent_attrs.uid
+            && req.uid != inode_attrs.uid
+        {
+            return Ok(libc::EACCES);
+        }
+
+        let mut new_parent_attrs = match fs.get_inode(new_parent) {
+            Ok(attrs) => attrs,
+            Err(error_code) => {
+                return Ok(error_code);
+            }
+        };
+
+        if !check_access(
+            new_parent_attrs.uid,
+            new_parent_attrs.gid,
+            new_parent_attrs.mode,
+            req.uid,
+            req.gid,
+            libc::W_OK,
+        ) {
+            return Ok(libc::EACCES);
+        }
+
+        // "Sticky bit" handling in new_parent
+        if new_parent_attrs.mode & libc::S_ISVTX as u16 != 0 {
+            if let Ok(existing_attrs) = fs.lookup_name(new_parent, new_name) {
+                if req.uid != 0 && req.uid != new_parent_attrs.uid && req.uid != existing_attrs.uid
+                {
+                    return Ok(libc::EACCES);
+                }
+            }
+        }
+
+        #[cfg(target_os = "linux")]
+        if flags & libc::RENAME_EXCHANGE as u32 != 0 {
+            let mut new_inode_attrs = match self.lookup_name(new_parent, new_name) {
+                Ok(attrs) => attrs,
+                Err(error_code) => {
+                    return Ok(error_code);
+                }
+            };
+
+            let mut entries = self.get_directory_content(new_parent).unwrap();
+            entries.insert(
+                new_name.as_bytes().to_vec(),
+                (inode_attrs.inode, inode_attrs.kind),
+            );
+            self.write_directory_content(new_parent, entries);
+
+            let mut entries = self.get_directory_content(parent).unwrap();
+            entries.insert(
+                name.as_bytes().to_vec(),
+                (new_inode_attrs.inode, new_inode_attrs.kind),
+            );
+            self.write_directory_content(parent, entries);
+
+            parent_attrs.last_metadata_changed = time_now();
+            parent_attrs.last_modified = time_now();
+            self.write_inode(&parent_attrs);
+            new_parent_attrs.last_metadata_changed = time_now();
+            new_parent_attrs.last_modified = time_now();
+            self.write_inode(&new_parent_attrs);
+            inode_attrs.last_metadata_changed = time_now();
+            self.write_inode(&inode_attrs);
+            new_inode_attrs.last_metadata_changed = time_now();
+            self.write_inode(&new_inode_attrs);
+
+            if inode_attrs.kind == FileKind::Directory {
+                let mut entries = self.get_directory_content(inode_attrs.inode).unwrap();
+                entries.insert(b"..".to_vec(), (new_parent, FileKind::Directory));
+                self.write_directory_content(inode_attrs.inode, entries);
+            }
+            if new_inode_attrs.kind == FileKind::Directory {
+                let mut entries = self.get_directory_content(new_inode_attrs.inode).unwrap();
+                entries.insert(b"..".to_vec(), (parent, FileKind::Directory));
+                self.write_directory_content(new_inode_attrs.inode, entries);
+            }
+
+            return Ok(SUCCESS);
+        }
+
+        // Only overwrite an existing directory if it's empty
+        if let Ok(new_name_attrs) = fs.lookup_name(new_parent, new_name) {
+            if new_name_attrs.kind == FileKind::Directory
+                && fs
+                    .get_directory_content(new_name_attrs.inode)
+                    .unwrap()
+                    .len()
+                    > 2
+            {
+                return Ok(libc::ENOTEMPTY);
+            }
+        }
+
+        // Only move an existing directory to a new parent, if we have write access to it,
+        // because that will change the ".." link in it
+        if inode_attrs.kind == FileKind::Directory
+            && parent != new_parent
+            && !check_access(
+                inode_attrs.uid,
+                inode_attrs.gid,
+                inode_attrs.mode,
+                req.uid,
+                req.gid,
+                libc::W_OK,
+            )
+        {
+            return Ok(libc::EACCES);
+        }
+
+        // If target already exists decrement its hardlink count
+        if let Ok(mut existing_inode_attrs) = fs.lookup_name(new_parent, new_name) {
+            let mut entries = fs.get_directory_content(new_parent).unwrap();
+            entries.remove(new_name.as_bytes());
+            fs.write_directory_content(new_parent, entries);
+
+            if existing_inode_attrs.kind == FileKind::Directory {
+                existing_inode_attrs.hardlinks = 0;
+            } else {
+                existing_inode_attrs.hardlinks -= 1;
+            }
+            existing_inode_attrs.last_metadata_changed = time_now();
+            fs.write_inode(&existing_inode_attrs);
+            fs.gc_inode(&existing_inode_attrs);
+        }
+
+        let mut entries = fs.get_directory_content(parent).unwrap();
+        entries.remove(name.as_bytes());
+        fs.write_directory_content(parent, entries);
+
+        let mut entries = fs.get_directory_content(new_parent).unwrap();
+        entries.insert(
+            new_name.as_bytes().to_vec(),
+            (inode_attrs.inode, inode_attrs.kind),
+        );
+        fs.write_directory_content(new_parent, entries);
+
+        parent_attrs.last_metadata_changed = time_now();
+        parent_attrs.last_modified = time_now();
+        fs.write_inode(&parent_attrs);
+        new_parent_attrs.last_metadata_changed = time_now();
+        new_parent_attrs.last_modified = time_now();
+        fs.write_inode(&new_parent_attrs);
+        inode_attrs.last_metadata_changed = time_now();
+        fs.write_inode(&inode_attrs);
+
+        if inode_attrs.kind == FileKind::Directory {
+            let mut entries = fs.get_directory_content(inode_attrs.inode).unwrap();
+            entries.insert(b"..".to_vec(), (new_parent, FileKind::Directory));
+            fs.write_directory_content(inode_attrs.inode, entries);
+        }
+
+        return Ok(SUCCESS);
     }
 
     async fn setattr(
         &self,
-        _req: &FileRequest,
-        ino: u64,
+        req: &FileRequest,
+        inode: u64,
         mode: Option<u32>,
         uid: Option<u32>,
         gid: Option<u32>,
         size: Option<u64>,
-        _atime: Option<TimeOrNow>,
-        _mtime: Option<TimeOrNow>,
+        atime: Option<TimeOrNow>,
+        mtime: Option<TimeOrNow>,
         _ctime: Option<SystemTime>,
         fh: Option<u64>,
         _crtime: Option<SystemTime>,
@@ -785,7 +1055,152 @@ impl ServerFileSystem for RemoteFileSystem {
         _bkuptime: Option<SystemTime>,
         flags: Option<u32>,
     ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
-        todo!()
+        let fs = &self.fs;
+
+        let mut attrs = match fs.get_inode(inode) {
+            Ok(attrs) => attrs,
+            Err(error_code) => {
+                return Ok((None, error_code));
+            }
+        };
+
+        if let Some(mode) = mode {
+            info!("chmod() called with {:?}, {:o}", inode, mode);
+            if req.uid != 0 && req.uid != attrs.uid {
+                return Ok((None, libc::EPERM));
+            }
+            if req.uid != 0 && req.gid != attrs.gid && !get_groups(req.pid).contains(&attrs.gid) {
+                // If SGID is set and the file belongs to a group that the caller is not part of
+                // then the SGID bit is suppose to be cleared during chmod
+                attrs.mode = (mode & !libc::S_ISGID as u32) as u16;
+            } else {
+                attrs.mode = mode as u16;
+            }
+            attrs.last_metadata_changed = time_now();
+            fs.write_inode(&attrs);
+            return Ok((Some(attrs.into()), SUCCESS));
+        }
+
+        if uid.is_some() || gid.is_some() {
+            info!("chown() called with {:?} {:?} {:?}", inode, uid, gid);
+            if let Some(gid) = gid {
+                // Non-root users can only change gid to a group they're in
+                if req.uid != 0 && !get_groups(req.pid).contains(&gid) {
+                    return Ok((None, libc::EPERM));
+                }
+            }
+            if let Some(uid) = uid {
+                if req.uid != 0
+                    // but no-op changes by the owner are not an error
+                    && !(uid == attrs.uid && req.uid == attrs.uid)
+                {
+                    return Ok((None, libc::EPERM));
+                }
+            }
+            // Only owner may change the group
+            if gid.is_some() && req.uid != 0 && req.uid != attrs.uid {
+                return Ok((None, libc::EPERM));
+            }
+
+            if attrs.mode & (libc::S_IXUSR | libc::S_IXGRP | libc::S_IXOTH) as u16 != 0 {
+                // SUID & SGID are suppose to be cleared when chown'ing an executable file
+                clear_suid_sgid(&mut attrs);
+            }
+
+            if let Some(uid) = uid {
+                attrs.uid = uid;
+                // Clear SETUID on owner change
+                attrs.mode &= !libc::S_ISUID as u16;
+            }
+            if let Some(gid) = gid {
+                attrs.gid = gid;
+                // Clear SETGID unless user is root
+                if req.uid != 0 {
+                    attrs.mode &= !libc::S_ISGID as u16;
+                }
+            }
+            attrs.last_metadata_changed = time_now();
+            fs.write_inode(&attrs);
+            return Ok((Some(attrs.into()), SUCCESS));
+        }
+
+        if let Some(size) = size {
+            info!("truncate() called with {:?} {:?}", inode, size);
+            if let Some(handle) = fh {
+                // If the file handle is available, check access locally.
+                // This is important as it preserves the semantic that a file handle opened
+                // with W_OK will never fail to truncate, even if the file has been subsequently
+                // chmod'ed
+                if fs.check_file_handle_write(handle) {
+                    if let Err(error_code) = fs.truncate(inode, size, 0, 0) {
+                        return Ok((None, error_code));
+                    }
+                } else {
+                    return Ok((None, libc::EACCES));
+                }
+            } else if let Err(error_code) = fs.truncate(inode, size, req.uid, req.gid) {
+                return Ok((None, error_code));
+            }
+        }
+
+        let now = time_now();
+        if let Some(atime) = atime {
+            info!("utimens() called with {:?}, atime={:?}", inode, atime);
+
+            if attrs.uid != req.uid && req.uid != 0 && atime != Now {
+                return Ok((None, libc::EPERM));
+            }
+
+            if attrs.uid != req.uid
+                && !check_access(
+                    attrs.uid,
+                    attrs.gid,
+                    attrs.mode,
+                    req.uid,
+                    req.gid,
+                    libc::W_OK,
+                )
+            {
+                return Ok((None, libc::EACCES));
+            }
+
+            attrs.last_accessed = match atime {
+                TimeOrNow::SpecificTime(time) => time_from_system_time(&time),
+                Now => now,
+            };
+            attrs.last_metadata_changed = now;
+            fs.write_inode(&attrs);
+        }
+        if let Some(mtime) = mtime {
+            info!("utimens() called with {:?}, mtime={:?}", inode, mtime);
+
+            if attrs.uid != req.uid && req.uid != 0 && mtime != Now {
+                return Ok((None, libc::EPERM));
+            }
+
+            if attrs.uid != req.uid
+                && !check_access(
+                    attrs.uid,
+                    attrs.gid,
+                    attrs.mode,
+                    req.uid,
+                    req.gid,
+                    libc::W_OK,
+                )
+            {
+                return Ok((None, libc::EACCES));
+            }
+
+            attrs.last_modified = match mtime {
+                TimeOrNow::SpecificTime(time) => time_from_system_time(&time),
+                Now => now,
+            };
+            attrs.last_metadata_changed = now;
+            fs.write_inode(&attrs);
+        }
+
+        let attrs = fs.get_inode(inode).unwrap();
+        return Ok((Some(attrs.into()), SUCCESS));
     }
 }
 

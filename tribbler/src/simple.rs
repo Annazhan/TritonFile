@@ -32,6 +32,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, fs, io};
 
+use crate::storage::FileRequest;
+
 pub const BLOCK_SIZE: u64 = 512;
 pub const MAX_NAME_LENGTH: u32 = 255;
 pub const MAX_FILE_SIZE: u64 = 1024 * 1024 * 1024 * 1024;
@@ -125,20 +127,20 @@ pub fn creation_gid(parent: &InodeAttributes, gid: u32) -> u32 {
     gid
 }
 
-fn xattr_access_check(
+pub fn xattr_access_check(
     key: &[u8],
     access_mask: i32,
     inode_attrs: &InodeAttributes,
-    request: &Request<'_>,
+    request: &FileRequest,
 ) -> Result<(), c_int> {
     match parse_xattr_namespace(key)? {
         XattrNamespace::Security => {
-            if access_mask != libc::R_OK && request.uid() != 0 {
+            if access_mask != libc::R_OK && request.uid != 0 {
                 return Err(libc::EPERM);
             }
         }
         XattrNamespace::Trusted => {
-            if request.uid() != 0 {
+            if request.uid != 0 {
                 return Err(libc::EPERM);
             }
         }
@@ -148,13 +150,13 @@ fn xattr_access_check(
                     inode_attrs.uid,
                     inode_attrs.gid,
                     inode_attrs.mode,
-                    request.uid(),
-                    request.gid(),
+                    request.uid,
+                    request.gid,
                     access_mask,
                 ) {
                     return Err(libc::EPERM);
                 }
-            } else if request.uid() != 0 {
+            } else if request.uid != 0 {
                 return Err(libc::EPERM);
             }
         }
@@ -163,8 +165,8 @@ fn xattr_access_check(
                 inode_attrs.uid,
                 inode_attrs.gid,
                 inode_attrs.mode,
-                request.uid(),
-                request.gid(),
+                request.uid,
+                request.gid,
                 access_mask,
             ) {
                 return Err(libc::EPERM);
@@ -179,7 +181,7 @@ pub fn time_now() -> (i64, u32) {
     time_from_system_time(&SystemTime::now())
 }
 
-fn system_time_from_time(secs: i64, nsecs: u32) -> SystemTime {
+pub fn system_time_from_time(secs: i64, nsecs: u32) -> SystemTime {
     if secs >= 0 {
         UNIX_EPOCH + Duration::new(secs as u64, nsecs)
     } else {
@@ -187,7 +189,7 @@ fn system_time_from_time(secs: i64, nsecs: u32) -> SystemTime {
     }
 }
 
-fn time_from_system_time(system_time: &SystemTime) -> (i64, u32) {
+pub fn time_from_system_time(system_time: &SystemTime) -> (i64, u32) {
     // Convert to signed 64-bit time with epoch at 0
     match system_time.duration_since(UNIX_EPOCH) {
         Ok(duration) => (duration.as_secs() as i64, duration.subsec_nanos()),
@@ -1572,63 +1574,63 @@ impl Filesystem for SimpleFS {
         );
     }
 
-    fn setxattr(
-        &mut self,
-        request: &Request<'_>,
-        inode: u64,
-        key: &OsStr,
-        value: &[u8],
-        _flags: i32,
-        _position: u32,
-        reply: ReplyEmpty,
-    ) {
-        if let Ok(mut attrs) = self.get_inode(inode) {
-            if let Err(error) = xattr_access_check(key.as_bytes(), libc::W_OK, &attrs, request) {
-                reply.error(error);
-                return;
-            }
+    // fn setxattr(
+    //     &mut self,
+    //     request: &Request<'_>,
+    //     inode: u64,
+    //     key: &OsStr,
+    //     value: &[u8],
+    //     _flags: i32,
+    //     _position: u32,
+    //     reply: ReplyEmpty,
+    // ) {
+    //     if let Ok(mut attrs) = self.get_inode(inode) {
+    //         if let Err(error) = xattr_access_check(key.as_bytes(), libc::W_OK, &attrs, request) {
+    //             reply.error(error);
+    //             return;
+    //         }
 
-            attrs.xattrs.insert(key.as_bytes().to_vec(), value.to_vec());
-            attrs.last_metadata_changed = time_now();
-            self.write_inode(&attrs);
-            reply.ok();
-        } else {
-            reply.error(libc::EBADF);
-        }
-    }
+    //         attrs.xattrs.insert(key.as_bytes().to_vec(), value.to_vec());
+    //         attrs.last_metadata_changed = time_now();
+    //         self.write_inode(&attrs);
+    //         reply.ok();
+    //     } else {
+    //         reply.error(libc::EBADF);
+    //     }
+    // }
 
-    fn getxattr(
-        &mut self,
-        request: &Request<'_>,
-        inode: u64,
-        key: &OsStr,
-        size: u32,
-        reply: ReplyXattr,
-    ) {
-        if let Ok(attrs) = self.get_inode(inode) {
-            if let Err(error) = xattr_access_check(key.as_bytes(), libc::R_OK, &attrs, request) {
-                reply.error(error);
-                return;
-            }
+    // fn getxattr(
+    //     &mut self,
+    //     request: &Request<'_>,
+    //     inode: u64,
+    //     key: &OsStr,
+    //     size: u32,
+    //     reply: ReplyXattr,
+    // ) {
+    //     if let Ok(attrs) = self.get_inode(inode) {
+    //         if let Err(error) = xattr_access_check(key.as_bytes(), libc::R_OK, &attrs, request) {
+    //             reply.error(error);
+    //             return;
+    //         }
 
-            if let Some(data) = attrs.xattrs.get(key.as_bytes()) {
-                if size == 0 {
-                    reply.size(data.len() as u32);
-                } else if data.len() <= size as usize {
-                    reply.data(data);
-                } else {
-                    reply.error(libc::ERANGE);
-                }
-            } else {
-                #[cfg(target_os = "linux")]
-                reply.error(libc::ENODATA);
-                #[cfg(not(target_os = "linux"))]
-                reply.error(libc::ENOATTR);
-            }
-        } else {
-            reply.error(libc::EBADF);
-        }
-    }
+    //         if let Some(data) = attrs.xattrs.get(key.as_bytes()) {
+    //             if size == 0 {
+    //                 reply.size(data.len() as u32);
+    //             } else if data.len() <= size as usize {
+    //                 reply.data(data);
+    //             } else {
+    //                 reply.error(libc::ERANGE);
+    //             }
+    //         } else {
+    //             #[cfg(target_os = "linux")]
+    //             reply.error(libc::ENODATA);
+    //             #[cfg(not(target_os = "linux"))]
+    //             reply.error(libc::ENOATTR);
+    //         }
+    //     } else {
+    //         reply.error(libc::EBADF);
+    //     }
+    // }
 
     fn listxattr(&mut self, _req: &Request<'_>, inode: u64, size: u32, reply: ReplyXattr) {
         if let Ok(attrs) = self.get_inode(inode) {
@@ -1651,8 +1653,14 @@ impl Filesystem for SimpleFS {
     }
 
     fn removexattr(&mut self, request: &Request<'_>, inode: u64, key: &OsStr, reply: ReplyEmpty) {
+        let fRequest = FileRequest {
+            uid: request.uid(),
+            gid: request.gid(),
+            pid: request.pid(),
+        };
+
         if let Ok(mut attrs) = self.get_inode(inode) {
-            if let Err(error) = xattr_access_check(key.as_bytes(), libc::W_OK, &attrs, request) {
+            if let Err(error) = xattr_access_check(key.as_bytes(), libc::W_OK, &attrs, &fRequest) {
                 reply.error(error);
                 return;
             }
@@ -1917,7 +1925,7 @@ pub fn as_file_kind(mut mode: u32) -> FileKind {
     }
 }
 
-fn get_groups(pid: u32) -> Vec<u32> {
+pub fn get_groups(pid: u32) -> Vec<u32> {
     #[cfg(not(target_os = "macos"))]
     {
         let path = format!("/proc/{}/task/{}/status", pid, pid);
