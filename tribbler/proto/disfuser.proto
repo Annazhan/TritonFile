@@ -204,13 +204,13 @@ service disfuser {
     rpc lookup(LookUp) returns (Reply) {} 
     rpc create(Create) returns (createReply) {} 
     rpc unlink(Unlink) returns (unlinkReply) {} 
-    rpc getattr(Getattr) returns (getattrReply) {} 
     rpc open(Open) returns (openReply) {} 
-    rpc release(Release) returns (releaseReply) {} 
-    rpc setxattr(Setxattr) returns (setxattrReply) {} 
-    rpc getxattr(Getxattr) returns (getxattrReply) {} 
-    rpc listxattr(Listxattr) returns (listxattrReply) {} 
+    rpc getattr(Getattr) returns (getattrReply) {} 
     rpc access(Access) returns (accessReply) {} 
     rpc rename(Rename) returns (renameReply) {} 
+    rpc release(Release) returns (releaseReply) {} 
+    rpc setxattr(stream Setxattr) returns (setxattrReply) {} 
+    rpc getxattr(Getxattr) returns (stream getxattrReply) {} 
+    rpc listxattr(Listxattr) returns (stream listxattrReply) {} 
     rpc setattr(Setattr) returns (setattrReply) {} 
 }
