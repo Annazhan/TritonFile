@@ -190,7 +190,7 @@ pub trait ServerFileSystem {
         _flags: i32,
         _lock_owner: Option<u64>,
         _flush: bool,
-    ) -> TritonFileResult<(c_int)>;
+    ) -> TritonFileResult<c_int>;
 
     async fn setxattr(
         &self,
@@ -200,7 +200,7 @@ pub trait ServerFileSystem {
         _value: &[u8],
         flags: i32,
         position: u32,
-    ) -> TritonFileResult<(c_int)>;
+    ) -> TritonFileResult<c_int>;
 
     //reply Vec<u8> as string
     async fn getxattr(
@@ -218,7 +218,7 @@ pub trait ServerFileSystem {
         size: u32,
     ) -> TritonFileResult<(Option<(String, u32)>, c_int)>;
 
-    async fn access(&self, _req: &FileRequest, ino: u64, mask: i32) -> TritonFileResult<(c_int)>;
+    async fn access(&self, _req: &FileRequest, ino: u64, mask: i32) -> TritonFileResult<c_int>;
 
     async fn rename(
         &self,
@@ -228,7 +228,7 @@ pub trait ServerFileSystem {
         newparent: u64,
         newname: &OsStr,
         flags: u32,
-    ) -> TritonFileResult<(c_int)>;
+    ) -> TritonFileResult<c_int>;
 
     async fn setattr(
         &self,
@@ -722,7 +722,7 @@ impl ServerFileSystem for RemoteFileSystem {
         _flags: i32,
         _lock_owner: Option<u64>,
         _flush: bool,
-    ) -> TritonFileResult<(c_int)> {
+    ) -> TritonFileResult<c_int> {
         let fs = &self.fs;
         if let Ok(mut attrs) = fs.get_inode(inode) {
             attrs.open_file_handles -= 1;
@@ -738,7 +738,7 @@ impl ServerFileSystem for RemoteFileSystem {
         value: &[u8],
         flags: i32,
         position: u32,
-    ) -> TritonFileResult<(c_int)> {
+    ) -> TritonFileResult<c_int> {
         let fs = &self.fs;
         if let Ok(mut attrs) = fs.get_inode(inode) {
             if let Err(error) = xattr_access_check(key.as_bytes(), libc::W_OK, &attrs, request) {
@@ -827,7 +827,7 @@ impl ServerFileSystem for RemoteFileSystem {
         }
     }
 
-    async fn access(&self, req: &FileRequest, inode: u64, mask: i32) -> TritonFileResult<(c_int)> {
+    async fn access(&self, req: &FileRequest, inode: u64, mask: i32) -> TritonFileResult<c_int> {
         let fs = &self.fs;
 
         info!("access() called with {:?} {:?}", inode, mask);
@@ -851,7 +851,7 @@ impl ServerFileSystem for RemoteFileSystem {
         new_parent: u64,
         new_name: &OsStr,
         flags: u32,
-    ) -> TritonFileResult<(c_int)> {
+    ) -> TritonFileResult<c_int> {
         let fs = &self.fs;
 
         let mut inode_attrs = match fs.lookup_name(parent, name) {

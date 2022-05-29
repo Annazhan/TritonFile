@@ -238,8 +238,8 @@ impl Filesystem for Front {
                         if error_code != SUCCESS {
                             reply.error(error_code);
                         } else {
-                            let (attr, fh) = attrs_fh_op.unwrap();
-                            reply.created(&Duration::new(0, 0), &attr, 0, fh, 0)
+                            let (attrs, fh) = attrs_fh_op.unwrap();
+                            reply.created(&Duration::new(0, 0), &attrs, 0, fh, 0)
                         }
                     }
                     Err(e) => reply.error(libc::ENETDOWN),
@@ -250,7 +250,6 @@ impl Filesystem for Front {
     }
 
     fn unlink(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: ReplyEmpty) {
-        // ReliableStore
         let FReq = &FileRequest {
             uid: _req.uid(),
             gid: _req.gid(),
@@ -293,9 +292,9 @@ impl Filesystem for Front {
 
         match bin_res {
             Ok(mut bin) => {
-                let bin_create_pre = bin.getattr(FReq, ino);
+                let bin_getattr_pre = bin.getattr(FReq, ino);
 
-                let res = self.runtime.block_on(bin_create_pre);
+                let res = self.runtime.block_on(bin_getattr_pre);
 
                 match res {
                     Ok(res_info) => {
@@ -303,8 +302,8 @@ impl Filesystem for Front {
                         if error_code != SUCCESS {
                             reply.error(error_code);
                         } else {
-                            let attr = attrs_op.unwrap();
-                            reply.attr(&Duration::new(0, 0), &attrs.into());
+                            let attrs = attrs_op.unwrap();
+                            reply.attr(&Duration::new(0, 0), &attrs);
                         }
                     }
                     Err(e) => reply.error(libc::ENETDOWN),
@@ -326,9 +325,9 @@ impl Filesystem for Front {
 
         match bin_res {
             Ok(mut bin) => {
-                let bin_create_pre = bin.open(FReq, inode, flags);
+                let bin_open_pre = bin.open(FReq, inode, flags);
 
-                let res = self.runtime.block_on(bin_create_pre);
+                let res = self.runtime.block_on(bin_open_pre);
 
                 match res {
                     Ok(res_info) => {
@@ -338,6 +337,297 @@ impl Filesystem for Front {
                         } else {
                             let (fh, open_flags) = attrs_op.unwrap();
                             reply.opened(fh, open_flags);
+                        }
+                    }
+                    Err(e) => reply.error(libc::ENETDOWN),
+                }
+            }
+            Err(e) => reply.error(libc::ENETDOWN),
+        }
+    }
+
+    fn release(
+        &mut self,
+        _req: &Request<'_>,
+        inode: u64,
+        _fh: u64,
+        _flags: i32,
+        _lock_owner: Option<u64>,
+        _flush: bool,
+        reply: ReplyEmpty,
+    ) {
+        let FReq = &FileRequest {
+            uid: _req.uid(),
+            gid: _req.gid(),
+            pid: _req.pid(),
+        };
+        let gid = _req.gid().to_string().clone();
+        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_res = self.runtime.block_on(bin_pre);
+
+        match bin_res {
+            Ok(mut bin) => {
+                let bin_release_pre = bin.release(FReq, inode, _fh, _flags, _lock_owner, _flush);
+
+                let res = self.runtime.block_on(bin_release_pre);
+
+                match res {
+                    Ok(error_code) => {
+                        if error_code != SUCCESS {
+                            reply.error(error_code)
+                        } else {
+                            reply.ok();
+                        }
+                    }
+                    Err(e) => reply.error(libc::ENETDOWN),
+                }
+            }
+            Err(e) => reply.error(libc::ENETDOWN),
+        }
+    }
+
+    fn setxattr(
+        &mut self,
+        request: &Request<'_>,
+        inode: u64,
+        key: &OsStr,
+        value: &[u8],
+        _flags: i32,
+        _position: u32,
+        reply: ReplyEmpty,
+    ) {
+        let FReq = &FileRequest {
+            uid: _req.uid(),
+            gid: _req.gid(),
+            pid: _req.pid(),
+        };
+        let gid = _req.gid().to_string().clone();
+        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_res = self.runtime.block_on(bin_pre);
+
+        match bin_res {
+            Ok(mut bin) => {
+                let bin_setxattr_pre = bin.setxattr(FReq, inode, key, value, _flags, _position);
+
+                let res = self.runtime.block_on(bin_setxattr_pre);
+
+                match res {
+                    Ok(error_code) => {
+                        if error_code != SUCCESS {
+                            reply.error(error_code)
+                        } else {
+                            reply.ok();
+                        }
+                    }
+                    Err(e) => reply.error(libc::ENETDOWN),
+                }
+            }
+            Err(e) => reply.error(libc::ENETDOWN),
+        }
+    }
+
+    fn getxattr(
+        &mut self,
+        request: &Request<'_>,
+        inode: u64,
+        key: &OsStr,
+        size: u32,
+        reply: ReplyXattr,
+    ) {
+        let FReq = &FileRequest {
+            uid: _req.uid(),
+            gid: _req.gid(),
+            pid: _req.pid(),
+        };
+        let gid = _req.gid().to_string().clone();
+        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_res = self.runtime.block_on(bin_pre);
+
+        match bin_res {
+            Ok(mut bin) => {
+                let bin_getxattr_pre = bin.getxattr(FReq, inode, key, size);
+                let res = self.runtime.block_on(bin_getxattr_pre);
+
+                match res {
+                    Ok((data_op, error_code)) => {
+                        if error_code != SUCCESS {
+                            reply.error(error_code)
+                        } else {
+                            let (string_data, data_len) = data_op;
+                            let str_data: &str = &string_data;
+                            let data: Vec<u8> = str_data.as_bytes().to_vec();
+
+                            if size == 0 {
+                                reply.size(data_len);
+                            } else if data_len <= size as usize {
+                                reply.data(data);
+                            } else {
+                                reply.error(libc::ERANGE);
+                            }
+                        }
+                    }
+                    Err(e) => reply.error(libc::ENETDOWN),
+                }
+            }
+            Err(e) => reply.error(libc::ENETDOWN),
+        }
+    }
+
+    fn listxattr(&mut self, _req: &Request<'_>, inode: u64, size: u32, reply: ReplyXattr) {
+        let FReq = &FileRequest {
+            uid: _req.uid(),
+            gid: _req.gid(),
+            pid: _req.pid(),
+        };
+        let gid = _req.gid().to_string().clone();
+        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_res = self.runtime.block_on(bin_pre);
+
+        match bin_res {
+            Ok(mut bin) => {
+                let bin_listxattr_pre = bin.listxattr(FReq, inode, size);
+                let res = self.runtime.block_on(bin_listxattr_pre);
+
+                match res {
+                    Ok((data_op, error_code)) => {
+                        if error_code != SUCCESS {
+                            reply.error(error_code)
+                        } else {
+                            let (string_data, data_len) = data_op;
+                            let str_data: &str = &string_data;
+                            let data: Vec<u8> = str_data.as_bytes().to_vec();
+
+                            if size == 0 {
+                                reply.size(data_len);
+                            } else if data_len <= size as usize {
+                                reply.data(data);
+                            } else {
+                                reply.error(libc::ERANGE);
+                            }
+                        }
+                    }
+                    Err(e) => reply.error(libc::ENETDOWN),
+                }
+            }
+            Err(e) => reply.error(libc::ENETDOWN),
+        }
+    }
+
+    fn access(&mut self, req: &Request, inode: u64, mask: i32, reply: ReplyEmpty) {
+        let FReq = &FileRequest {
+            uid: _req.uid(),
+            gid: _req.gid(),
+            pid: _req.pid(),
+        };
+        let gid = _req.gid().to_string().clone();
+        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_res = self.runtime.block_on(bin_pre);
+
+        match bin_res {
+            Ok(mut bin) => {
+                let bin_access_pre = bin.access(FReq, inode, mask);
+
+                let res = self.runtime.block_on(bin_access_pre);
+
+                match res {
+                    Ok(error_code) => {
+                        if error_code != SUCCESS {
+                            reply.error(error_code)
+                        } else {
+                            reply.ok();
+                        }
+                    }
+                    Err(e) => reply.error(libc::ENETDOWN),
+                }
+            }
+            Err(e) => reply.error(libc::ENETDOWN),
+        }
+    }
+
+    fn rename(
+        &mut self,
+        req: &Request,
+        parent: u64,
+        name: &OsStr,
+        new_parent: u64,
+        new_name: &OsStr,
+        flags: u32,
+        reply: ReplyEmpty,
+    ) {
+        let FReq = &FileRequest {
+            uid: _req.uid(),
+            gid: _req.gid(),
+            pid: _req.pid(),
+        };
+        let gid = _req.gid().to_string().clone();
+        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_res = self.runtime.block_on(bin_pre);
+
+        match bin_res {
+            Ok(mut bin) => {
+                let bin_rename_pre = bin.rename(FReq, parent, name, new_parent, new_name, flags);
+
+                let res = self.runtime.block_on(bin_rename_pre);
+
+                match res {
+                    Ok(error_code) => {
+                        if error_code != SUCCESS {
+                            reply.error(error_code)
+                        } else {
+                            reply.ok();
+                        }
+                    }
+                    Err(e) => reply.error(libc::ENETDOWN),
+                }
+            }
+            Err(e) => reply.error(libc::ENETDOWN),
+        }
+    }
+
+    fn setattr(
+        &mut self,
+        req: &Request,
+        inode: u64,
+        mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        atime: Option<TimeOrNow>,
+        mtime: Option<TimeOrNow>,
+        _ctime: Option<SystemTime>,
+        fh: Option<u64>,
+        _crtime: Option<SystemTime>,
+        _chgtime: Option<SystemTime>,
+        _bkuptime: Option<SystemTime>,
+        _flags: Option<u32>,
+        reply: ReplyAttr,
+    ) {
+        let FReq = &FileRequest {
+            uid: req.uid(),
+            gid: req.gid(),
+            pid: req.pid(),
+        };
+        let gid = req.gid().to_string().clone();
+        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_res = self.runtime.block_on(bin_pre);
+
+        match bin_res {
+            Ok(mut bin) => {
+                let bin_setattr_pre = bin.setattr(
+                    FReq, inode, mode, uid, gid, size, atime, mtime, _ctime, fh, _crtime, _chgtime,
+                    _bkuptime, _flags,
+                );
+
+                let res = self.runtime.block_on(bin_setattr_pre);
+
+                match res {
+                    Ok(res_info) => {
+                        let (attrs_op, error_code) = res_info;
+                        if error_code != SUCCESS {
+                            reply.error(error_code);
+                        } else {
+                            let attrs = attrs_op.unwrap();
+                            reply.attr(&Duration::new(0, 0), &attrs);
                         }
                     }
                     Err(e) => reply.error(libc::ENETDOWN),
