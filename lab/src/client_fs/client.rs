@@ -74,7 +74,7 @@ fn write_requests_iter(
     let mut end = 0;
 
     for i in 0..n {
-        let FReq = FRequest {
+        let freq = FRequest {
             uid: _req.uid,
             gid: _req.gid,
             pid: _req.pid,
@@ -83,7 +83,7 @@ fn write_requests_iter(
         start = i * slice_size;
         end = min(start + slice_size, data_len);
         let element = Write {
-            frequest: FReq,
+            frequest: freq,
             ino: inode,
             fh,
             offset,
@@ -94,7 +94,49 @@ fn write_requests_iter(
         };
         vec.push(element);
     }
+    return tokio_stream::iter(vec);
+}
 
+// convert the write into a write stream
+fn setxattr_requests_iter(
+    _req: FRequest,
+    ino: u64,
+    name: &OsStr,
+    _value: &[u8],
+    flags: i32,
+    position: u32,
+) -> impl Stream<Item = Setxattr> {
+    let data_string = serde_json::to_string(_value).unwrap();
+    let data_len = data_string.len();
+
+    let mut n = data_len / slice_size;
+    if data_len % slice_size != 0 {
+        n += 1;
+    }
+
+    let mut vec: Vec<Setxattr> = Vec::new();
+    let mut start = 0;
+    let mut end = 0;
+
+    for i in 0..n {
+        let freq = FRequest {
+            uid: _req.uid,
+            gid: _req.gid,
+            pid: _req.pid,
+        };
+
+        start = i * slice_size;
+        end = min(start + slice_size, data_len);
+        let element = Setxattr {
+            frequest: freq,
+            ino: ino,
+            name: name_string,
+            value: value_string,
+            flags: flags,
+            position: position,
+        };
+        vec.push(element);
+    }
     return tokio_stream::iter(vec);
 }
 
@@ -392,17 +434,18 @@ impl ServerFileSystem for StorageClient {
 
         let name_string = name.to_str().unwrap().to_string();
         let mut client = self.disfuser_client().await;
+        
         let value_string = std::str::from_utf8(_value).unwrap().to_string();
-        let result = client
-            .setxattr(Setxattr {
-                frequest: freq,
-                ino: ino,
-                name: name_string,
-                value: value_string,
-                flags: flags,
-                position: position,
-            })
-            .await?;
+        let in_stream = setxattr_requests_iter(
+            freq,
+            ino,
+            name_string,
+            value_string,
+            flags,
+            position,
+        );
+
+        let result = client.setxattr(in_stream).await?;
         let error_code = result.into_inner().errcode;
         if error_code != SUCCESS {
             return Ok(error_code);
@@ -426,23 +469,29 @@ impl ServerFileSystem for StorageClient {
 
         let name_string = name.to_str().unwrap().to_string();
         let mut client = self.disfuser_client().await;
-        let result = client
+        let mut stream = client
             .getxattr(Getxattr {
                 frequest: freq,
                 ino: ino,
                 name: name_string,
                 size: size,
             })
-            .await?;
+            .await.unwrap().into_inner();
 
-        let getxattrReply = result.into_inner();
-        let data = getxattrReply.data;
-        let size = getxattrReply.size;
-        let error_code = getxattrReply.errcode;
-        if error_code != SUCCESS {
-            return Ok((None, error_code));
+        let mut received: Vec<String> = Vec::new();
+        let mut error_code: c_int;
+        let mut size: u32; 
+        while let Some(item) = stream.next().await {
+            let reply = item.unwrap();
+            received.push(reply.data);
+            size = reply.size; 
+            error_code = reply.errcode;
+            if error_code != SUCCESS {
+                return Ok((None, error_code));
+            }
         }
-        Ok((Some((data, size)), SUCCESS))
+        let joined_received = received.join("");
+        Ok((Some((joined_received, size)), SUCCESS))
     }
 
     async fn listxattr(
@@ -458,21 +507,27 @@ impl ServerFileSystem for StorageClient {
         };
 
         let mut client = self.disfuser_client().await;
-        let result = client
-            .listxattr(Listxattr {
-                frequest: freq,
-                ino: ino,
-                size: size,
-            })
-            .await?;
-        let listxattrReply = result.into_inner();
-        let data = listxattrReply.data;
-        let size = listxattrReply.size;
-        let error_code = listxattrReply.errcode;
-        if error_code != SUCCESS {
-            return Ok((None, error_code));
+        
+        let mut stream = client
+        .listxattr(Listxattr {
+            frequest: freq,
+            ino: ino,
+            size: size,
+        })
+        .await.unwrap().into_inner();
+
+        let mut received: Vec<String> = Vec::new();
+        let mut error_code: c_int;
+        let mut size: u32; 
+        while let Some(item) = stream.next().await {
+            let reply = item.unwrap();
+            received.push(reply.data);
+            size = reply.size; 
+            error_code = reply.errcode;
+            if error_code != SUCCESS {
+                return Ok((None, error_code));
+            }
         }
-        Ok((Some((data, size)), SUCCESS))
     }
 
     async fn access(&self, _req: &FileRequest, ino: u64, mask: i32) -> TritonFileResult<(c_int)> {
