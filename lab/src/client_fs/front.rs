@@ -7,6 +7,7 @@ use fuser::consts::FUSE_WRITE_KILL_PRIV;
 use fuser::{Filesystem, ReplyCreate, ReplyData, ReplyEmpty, ReplyEntry, ReplyWrite, Request};
 #[cfg(feature = "abi-7-26")]
 use log::info;
+use tokio::runtime::Runtime;
 use std::ffi::OsStr;
 #[cfg(target_os = "linux")]
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -22,17 +23,14 @@ pub struct Front {
     // original Front
     binstore: Box<dyn storage::BinStorage>,
     clock: atomic::AtomicU64,
-
     runtime: tokio::runtime::Runtime,
 }
 
 impl Front {
     pub fn new(
-        binstore: Box<dyn storage::BinStorage>
+        binstore: Box<dyn storage::BinStorage>,
+        runtime: tokio::runtime::Runtime
     ) -> Front {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .build()
-            .unwrap();
         #[cfg(feature = "abi-7-26")]
         {
             Front {

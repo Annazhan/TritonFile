@@ -323,11 +323,16 @@ async fn test_server_setup() -> TritonFileResult<()> {
         options.push(MountOption::AllowRoot);
     }
 
+    let runtime = tokio::runtime::Builder::new_current_thread()
+    .build()
+    .unwrap();
+    let front =  Front::new(
+        bin_client,
+        runtime
+    );
     let result = fuser::mount2(
-        Front::new(
-            bin_client,
-        ),
-        "/Users/lynnz/Desktop/tmp/",
+        front, 
+        "/Users/stella/Desktop/tmp/",
         &options,
     );
     if let Err(e) = result {
