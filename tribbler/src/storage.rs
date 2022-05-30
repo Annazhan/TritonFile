@@ -769,7 +769,7 @@ impl ServerFileSystem for RemoteFileSystem {
                 return Ok((None, error));
             }
 
-            /// check size to get usize
+            // check size to get usize
             if let Some(data) = attrs.xattrs.get(key.as_bytes()) {
                 if size == 0 {
                     return Ok((

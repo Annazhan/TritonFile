@@ -4,15 +4,14 @@
 use fuser::consts::FUSE_HANDLE_KILLPRIV;
 #[cfg(feature = "abi-7-31")]
 use fuser::consts::FUSE_WRITE_KILL_PRIV;
-use fuser::{Filesystem, ReplyCreate, ReplyData, ReplyEmpty, ReplyEntry, ReplyWrite, Request};
+use fuser::{Filesystem, ReplyCreate, ReplyData, ReplyEmpty, ReplyEntry, ReplyWrite, Request, TimeOrNow, ReplyAttr, ReplyXattr, ReplyOpen};
 #[cfg(feature = "abi-7-26")]
 use log::info;
 use std::ffi::OsStr;
 #[cfg(target_os = "linux")]
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
 use tribbler::storage::FileRequest;
-
+use std::time::{Duration, SystemTime};
 use std::sync::atomic;
 
 use tribbler::error::{TritonFileError, TritonFileResult, SUCCESS};
@@ -29,8 +28,8 @@ pub struct Front {
 impl Front {
     pub fn new(binstore: Box<dyn storage::BinStorage>) -> Front {
         let runtime = tokio::runtime::Builder::new_current_thread()
-            .build()
-            .unwrap();
+        .build()
+        .unwrap();
         #[cfg(feature = "abi-7-26")]
         {
             Front {
@@ -82,13 +81,13 @@ impl Filesystem for Front {
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(mut bin) => {
-                let FReq = &FileRequest {
+            Ok(bin) => {
+                let freq = &FileRequest {
                     uid: req.uid(),
                     gid: req.gid(),
                     pid: req.pid(),
                 };
-                let bin_lookup_pre = bin.lookup(FReq, parent, name);
+                let bin_lookup_pre = bin.lookup(freq, parent, name);
 
                 let res = self.runtime.block_on(bin_lookup_pre);
 
@@ -102,10 +101,10 @@ impl Filesystem for Front {
                             reply.entry(&Duration::new(0, 0), &attrs, 0);
                         }
                     }
-                    Err(e) => reply.error(libc::ENETDOWN),
+                    Err(_) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => reply.error(libc::ENETDOWN),
+            Err(_) => reply.error(libc::ENETDOWN),
         }
     }
 
@@ -127,12 +126,12 @@ impl Filesystem for Front {
 
         match bin_res {
             Ok(bin) => {
-                let FReq = &FileRequest {
+                let freq = &FileRequest {
                     uid: _req.uid(),
                     gid: _req.gid(),
                     pid: _req.pid(),
                 };
-                let bin_read_pre = bin.read(FReq, inode, fh, offset, size, _flags, _lock_owner);
+                let bin_read_pre = bin.read(freq, inode, fh, offset, size, _flags, _lock_owner);
 
                 let res = self.runtime.block_on(bin_read_pre);
 
@@ -167,7 +166,7 @@ impl Filesystem for Front {
         reply: ReplyWrite,
     ) {
         // ReliableStore
-        let FReq = &FileRequest {
+        let freq = &FileRequest {
             uid: _req.uid(),
             gid: _req.gid(),
             pid: _req.pid(),
@@ -177,9 +176,9 @@ impl Filesystem for Front {
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(mut bin) => {
+            Ok(bin) => {
                 let bin_write_pre = bin.write(
-                    FReq,
+                    freq,
                     inode,
                     fh,
                     offset,
@@ -200,10 +199,10 @@ impl Filesystem for Front {
                             reply.written(written)
                         }
                     }
-                    Err(e) => reply.error(libc::ENETDOWN),
+                    Err(_) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => reply.error(libc::ENETDOWN),
+            Err(_) => reply.error(libc::ENETDOWN),
         }
     }
 
@@ -212,12 +211,12 @@ impl Filesystem for Front {
         req: &Request,
         parent: u64,
         name: &OsStr,
-        mut mode: u32,
+        mode: u32,
         _umask: u32,
         flags: i32,
         reply: ReplyCreate,
     ) {
-        let FReq = &FileRequest {
+        let freq = &FileRequest {
             uid: req.uid(),
             gid: req.gid(),
             pid: req.pid(),
@@ -227,8 +226,8 @@ impl Filesystem for Front {
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(mut bin) => {
-                let bin_create_pre = bin.create(FReq, parent, name, mode, _umask, flags);
+            Ok(bin) => {
+                let bin_create_pre = bin.create(freq, parent, name, mode, _umask, flags);
 
                 let res = self.runtime.block_on(bin_create_pre);
 
@@ -242,15 +241,15 @@ impl Filesystem for Front {
                             reply.created(&Duration::new(0, 0), &attrs, 0, fh, 0)
                         }
                     }
-                    Err(e) => reply.error(libc::ENETDOWN),
+                    Err(_) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => reply.error(libc::ENETDOWN),
+            Err(_) => reply.error(libc::ENETDOWN),
         }
     }
 
     fn unlink(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: ReplyEmpty) {
-        let FReq = &FileRequest {
+        let freq = &FileRequest {
             uid: _req.uid(),
             gid: _req.gid(),
             pid: _req.pid(),
@@ -260,8 +259,8 @@ impl Filesystem for Front {
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(mut bin) => {
-                let bin_unlink_pre = bin.unlink(FReq, parent, name);
+            Ok(bin) => {
+                let bin_unlink_pre = bin.unlink(freq, parent, name);
 
                 let res = self.runtime.block_on(bin_unlink_pre);
 
@@ -273,26 +272,26 @@ impl Filesystem for Front {
                             reply.ok();
                         }
                     }
-                    Err(e) => reply.error(libc::ENETDOWN),
+                    Err(_) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => reply.error(libc::ENETDOWN),
+            Err(_) => reply.error(libc::ENETDOWN),
         }
     }
 
     fn getattr(&mut self, _req: &Request, inode: u64, reply: ReplyAttr) {
-        let FReq = &FileRequest {
-            uid: req.uid(),
-            gid: req.gid(),
-            pid: req.pid(),
+        let freq = &FileRequest {
+            uid: _req.uid(),
+            gid: _req.gid(),
+            pid: _req.pid(),
         };
-        let gid = req.gid().to_string().clone();
+        let gid = _req.gid().to_string().clone();
         let bin_pre = self.binstore.bin(gid.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(mut bin) => {
-                let bin_getattr_pre = bin.getattr(FReq, ino);
+            Ok(bin) => {
+                let bin_getattr_pre = bin.getattr(freq, inode);
 
                 let res = self.runtime.block_on(bin_getattr_pre);
 
@@ -306,15 +305,15 @@ impl Filesystem for Front {
                             reply.attr(&Duration::new(0, 0), &attrs);
                         }
                     }
-                    Err(e) => reply.error(libc::ENETDOWN),
+                    Err(_) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => reply.error(libc::ENETDOWN),
+            Err(_) => reply.error(libc::ENETDOWN),
         }
     }
 
     fn open(&mut self, req: &Request, inode: u64, flags: i32, reply: ReplyOpen) {
-        let FReq = &FileRequest {
+        let freq = &FileRequest {
             uid: req.uid(),
             gid: req.gid(),
             pid: req.pid(),
@@ -324,8 +323,8 @@ impl Filesystem for Front {
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(mut bin) => {
-                let bin_open_pre = bin.open(FReq, inode, flags);
+            Ok(bin) => {
+                let bin_open_pre = bin.open(freq, inode, flags);
 
                 let res = self.runtime.block_on(bin_open_pre);
 
@@ -339,10 +338,10 @@ impl Filesystem for Front {
                             reply.opened(fh, open_flags);
                         }
                     }
-                    Err(e) => reply.error(libc::ENETDOWN),
+                    Err(_) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => reply.error(libc::ENETDOWN),
+            Err(_) => reply.error(libc::ENETDOWN),
         }
     }
 
@@ -356,7 +355,7 @@ impl Filesystem for Front {
         _flush: bool,
         reply: ReplyEmpty,
     ) {
-        let FReq = &FileRequest {
+        let freq = &FileRequest {
             uid: _req.uid(),
             gid: _req.gid(),
             pid: _req.pid(),
@@ -366,8 +365,8 @@ impl Filesystem for Front {
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(mut bin) => {
-                let bin_release_pre = bin.release(FReq, inode, _fh, _flags, _lock_owner, _flush);
+            Ok(bin) => {
+                let bin_release_pre = bin.release(freq, inode, _fh, _flags, _lock_owner, _flush);
 
                 let res = self.runtime.block_on(bin_release_pre);
 
@@ -379,10 +378,10 @@ impl Filesystem for Front {
                             reply.ok();
                         }
                     }
-                    Err(e) => reply.error(libc::ENETDOWN),
+                    Err(_) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => reply.error(libc::ENETDOWN),
+            Err(_) => reply.error(libc::ENETDOWN),
         }
     }
 
@@ -396,18 +395,18 @@ impl Filesystem for Front {
         _position: u32,
         reply: ReplyEmpty,
     ) {
-        let FReq = &FileRequest {
-            uid: _req.uid(),
-            gid: _req.gid(),
-            pid: _req.pid(),
+        let freq = &FileRequest {
+            uid: request.uid(),
+            gid: request.gid(),
+            pid: request.pid(),
         };
-        let gid = _req.gid().to_string().clone();
+        let gid = request.gid().to_string().clone();
         let bin_pre = self.binstore.bin(gid.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(mut bin) => {
-                let bin_setxattr_pre = bin.setxattr(FReq, inode, key, value, _flags, _position);
+            Ok(bin) => {
+                let bin_setxattr_pre = bin.setxattr(freq, inode, key, value, _flags, _position);
 
                 let res = self.runtime.block_on(bin_setxattr_pre);
 
@@ -419,10 +418,10 @@ impl Filesystem for Front {
                             reply.ok();
                         }
                     }
-                    Err(e) => reply.error(libc::ENETDOWN),
+                    Err(_) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => reply.error(libc::ENETDOWN),
+            Err(_) => reply.error(libc::ENETDOWN),
         }
     }
 
@@ -434,18 +433,18 @@ impl Filesystem for Front {
         size: u32,
         reply: ReplyXattr,
     ) {
-        let FReq = &FileRequest {
-            uid: _req.uid(),
-            gid: _req.gid(),
-            pid: _req.pid(),
+        let freq = &FileRequest {
+            uid: request.uid(),
+            gid: request.gid(),
+            pid: request.pid(),
         };
-        let gid = _req.gid().to_string().clone();
+        let gid = request.gid().to_string().clone();
         let bin_pre = self.binstore.bin(gid.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(mut bin) => {
-                let bin_getxattr_pre = bin.getxattr(FReq, inode, key, size);
+            Ok(bin) => {
+                let bin_getxattr_pre = bin.getxattr(freq, inode, key, size);
                 let res = self.runtime.block_on(bin_getxattr_pre);
 
                 match res {
@@ -453,28 +452,26 @@ impl Filesystem for Front {
                         if error_code != SUCCESS {
                             reply.error(error_code)
                         } else {
-                            let (string_data, data_len) = data_op;
+                            let (string_data, data_len) = data_op.unwrap();
                             let str_data: &str = &string_data;
                             let data: Vec<u8> = str_data.as_bytes().to_vec();
 
                             if size == 0 {
                                 reply.size(data_len);
-                            } else if data_len <= size as usize {
-                                reply.data(data);
-                            } else {
-                                reply.error(libc::ERANGE);
-                            }
+                            } else if data_len <= size {
+                                reply.data(&data);
+                            } 
                         }
                     }
-                    Err(e) => reply.error(libc::ENETDOWN),
+                    Err(_) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => reply.error(libc::ENETDOWN),
+            Err(_) => reply.error(libc::ENETDOWN),
         }
     }
 
     fn listxattr(&mut self, _req: &Request<'_>, inode: u64, size: u32, reply: ReplyXattr) {
-        let FReq = &FileRequest {
+        let freq = &FileRequest {
             uid: _req.uid(),
             gid: _req.gid(),
             pid: _req.pid(),
@@ -484,8 +481,8 @@ impl Filesystem for Front {
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(mut bin) => {
-                let bin_listxattr_pre = bin.listxattr(FReq, inode, size);
+            Ok(bin) => {
+                let bin_listxattr_pre = bin.listxattr(freq, inode, size);
                 let res = self.runtime.block_on(bin_listxattr_pre);
 
                 match res {
@@ -493,39 +490,37 @@ impl Filesystem for Front {
                         if error_code != SUCCESS {
                             reply.error(error_code)
                         } else {
-                            let (string_data, data_len) = data_op;
+                            let (string_data, data_len) = data_op.unwrap();
                             let str_data: &str = &string_data;
                             let data: Vec<u8> = str_data.as_bytes().to_vec();
 
                             if size == 0 {
                                 reply.size(data_len);
-                            } else if data_len <= size as usize {
-                                reply.data(data);
-                            } else {
-                                reply.error(libc::ERANGE);
-                            }
+                            } else if data_len <= size {
+                                reply.data(&data);
+                            } 
                         }
                     }
-                    Err(e) => reply.error(libc::ENETDOWN),
+                    Err(_) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => reply.error(libc::ENETDOWN),
+            Err(_) => reply.error(libc::ENETDOWN),
         }
     }
 
     fn access(&mut self, req: &Request, inode: u64, mask: i32, reply: ReplyEmpty) {
-        let FReq = &FileRequest {
-            uid: _req.uid(),
-            gid: _req.gid(),
-            pid: _req.pid(),
+        let freq = &FileRequest {
+            uid: req.uid(),
+            gid: req.gid(),
+            pid: req.pid(),
         };
-        let gid = _req.gid().to_string().clone();
+        let gid = req.gid().to_string().clone();
         let bin_pre = self.binstore.bin(gid.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(mut bin) => {
-                let bin_access_pre = bin.access(FReq, inode, mask);
+            Ok(bin) => {
+                let bin_access_pre = bin.access(freq, inode, mask);
 
                 let res = self.runtime.block_on(bin_access_pre);
 
@@ -537,10 +532,10 @@ impl Filesystem for Front {
                             reply.ok();
                         }
                     }
-                    Err(e) => reply.error(libc::ENETDOWN),
+                    Err(_) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => reply.error(libc::ENETDOWN),
+            Err(_) => reply.error(libc::ENETDOWN),
         }
     }
 
@@ -554,18 +549,18 @@ impl Filesystem for Front {
         flags: u32,
         reply: ReplyEmpty,
     ) {
-        let FReq = &FileRequest {
-            uid: _req.uid(),
-            gid: _req.gid(),
-            pid: _req.pid(),
+        let freq = &FileRequest {
+            uid: req.uid(),
+            gid: req.gid(),
+            pid: req.pid(),
         };
-        let gid = _req.gid().to_string().clone();
+        let gid = req.gid().to_string().clone();
         let bin_pre = self.binstore.bin(gid.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(mut bin) => {
-                let bin_rename_pre = bin.rename(FReq, parent, name, new_parent, new_name, flags);
+            Ok(bin) => {
+                let bin_rename_pre = bin.rename(freq, parent, name, new_parent, new_name, flags);
 
                 let res = self.runtime.block_on(bin_rename_pre);
 
@@ -577,10 +572,10 @@ impl Filesystem for Front {
                             reply.ok();
                         }
                     }
-                    Err(e) => reply.error(libc::ENETDOWN),
+                    Err(_) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => reply.error(libc::ENETDOWN),
+            Err(_) => reply.error(libc::ENETDOWN),
         }
     }
 
@@ -602,19 +597,19 @@ impl Filesystem for Front {
         _flags: Option<u32>,
         reply: ReplyAttr,
     ) {
-        let FReq = &FileRequest {
+        let freq = &FileRequest {
             uid: req.uid(),
             gid: req.gid(),
             pid: req.pid(),
         };
-        let gid = req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let gid_string = req.gid().to_string().clone();
+        let bin_pre = self.binstore.bin(gid_string.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
-            Ok(mut bin) => {
+            Ok(bin) => {
                 let bin_setattr_pre = bin.setattr(
-                    FReq, inode, mode, uid, gid, size, atime, mtime, _ctime, fh, _crtime, _chgtime,
+                    freq, inode, mode, uid, gid, size, atime, mtime, _ctime, fh, _crtime, _chgtime,
                     _bkuptime, _flags,
                 );
 
@@ -630,10 +625,10 @@ impl Filesystem for Front {
                             reply.attr(&Duration::new(0, 0), &attrs);
                         }
                     }
-                    Err(e) => reply.error(libc::ENETDOWN),
+                    Err(_) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(e) => reply.error(libc::ENETDOWN),
+            Err(_) => reply.error(libc::ENETDOWN),
         }
     }
 }

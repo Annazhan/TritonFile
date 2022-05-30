@@ -124,11 +124,11 @@ message Setattr{
     optional uint32 gid = 5; 
     optional uint64 size = 6; 
     optional uint64 fh = 7;     
-    required uint32 flags = 8;
-    optional int64 atime_secs = 9;
-    optional int64 atime_nsecs = 10;
-    optional int64 ctime_secs = 11;
-    optional int64 ctime_nsecs = 12;
+    optional uint32 flags = 8;
+    optional int64  atime_secs = 9;
+    optional uint32 atime_nsecs = 10;
+    optional int64  mtime_secs = 11;
+    optional uint32 mtime_nsecs = 12;
 }
 
 message Reply {

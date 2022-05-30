@@ -658,7 +658,7 @@ impl ServerFileSystem for ReliableStore {
         _flags: i32,
         _lock_owner: Option<u64>,
         _flush: bool,
-    ) -> TritonFileResult<(c_int)> {
+    ) -> TritonFileResult<c_int> {
         loop {
             let primary = self.primary_store().await?;
             let backup = self.backup_store().await?;
@@ -758,7 +758,7 @@ impl ServerFileSystem for ReliableStore {
         newparent: u64,
         newname: &OsStr,
         flags: u32,
-    ) -> TritonFileResult<(c_int)> {
+    ) -> TritonFileResult<c_int> {
         loop {
             let primary = self.primary_store().await?;
             let backup = self.backup_store().await?;

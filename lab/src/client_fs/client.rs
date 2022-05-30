@@ -1,5 +1,6 @@
 use std::cmp::min;
 use std::ffi::OsStr;
+use std::time::UNIX_EPOCH;
 
 use async_trait::async_trait;
 use fuser::FileAttr;
@@ -14,7 +15,7 @@ use tonic::Code;
 use tribbler::disfuser::disfuser_client::DisfuserClient;
 use tribbler::disfuser::{
     Access, Create, FRequest, Getattr, Getxattr, Listxattr, LookUp, Open, Read, Release, Rename,
-    Setxattr, Unlink, Write,
+    Setxattr, Unlink, Write, Setattr
 };
 use tribbler::disfuser_server::slice_size;
 use tribbler::error::{TritonFileResult, SUCCESS};
@@ -70,8 +71,8 @@ fn write_requests_iter(
     }
 
     let mut vec: Vec<Write> = Vec::new();
-    let mut start = 0;
-    let mut end = 0;
+    let mut start: usize;
+    let mut end: usize;
 
     for i in 0..n {
         let freq = FRequest {
@@ -115,8 +116,11 @@ fn setxattr_requests_iter(
     }
 
     let mut vec: Vec<Setxattr> = Vec::new();
-    let mut start = 0;
-    let mut end = 0;
+    let mut start: usize;
+    let mut end: usize;
+
+    let name_string = name.to_str().unwrap().to_string();
+    let value_string = serde_json::to_string(_value).unwrap();
 
     for i in 0..n {
         let freq = FRequest {
@@ -130,8 +134,8 @@ fn setxattr_requests_iter(
         let element = Setxattr {
             frequest: freq,
             ino: ino,
-            name: name_string,
-            value: value_string,
+            name: name_string.clone(),
+            value: value_string.clone()[start..end].to_string(),
             flags: flags,
             position: position,
         };
@@ -153,7 +157,7 @@ impl ServerFileSystem for StorageClient {
         _lock_owner: Option<u64>,
     ) -> TritonFileResult<(Option<String>, c_int)> {
         let mut client = self.disfuser_client().await;
-        let FReq = FRequest {
+        let freq = FRequest {
             uid: _req.uid,
             gid: _req.gid,
             pid: _req.pid,
@@ -161,7 +165,7 @@ impl ServerFileSystem for StorageClient {
 
         let mut stream = client
             .read(Read {
-                frequest: FReq,
+                frequest: freq,
                 ino: inode,
                 fh,
                 offset,
@@ -218,9 +222,9 @@ impl ServerFileSystem for StorageClient {
 
         let result = client.write(in_stream).await?;
 
-        let writeReply = result.into_inner();
-        let size = writeReply.size;
-        let error_code = writeReply.errcode;
+        let write_reply = result.into_inner();
+        let size = write_reply.size;
+        let error_code = write_reply.errcode;
         if error_code != SUCCESS {
             return Ok((None, error_code));
         }
@@ -249,12 +253,12 @@ impl ServerFileSystem for StorageClient {
                 name: name_string,
             })
             .await?;
-        let lookupReply = result.into_inner();
-        let error_code = lookupReply.errcode;
+        let lookup_reply = result.into_inner();
+        let error_code = lookup_reply.errcode;
         if error_code != SUCCESS {
             return Ok((None, error_code));
         }
-        let received_attr = lookupReply.message;
+        let received_attr = lookup_reply.message;
         let fileattr = serde_json::from_str::<FileAttr>(&received_attr).unwrap();
         Ok((Some(fileattr), SUCCESS))
     }
@@ -264,7 +268,7 @@ impl ServerFileSystem for StorageClient {
         req: &FileRequest,
         parent: u64,
         name: &OsStr,
-        mut mode: u32,
+        mode: u32,
         _umask: u32,
         flags: i32,
     ) -> TritonFileResult<(Option<(FileAttr, u64)>, c_int)> {
@@ -287,10 +291,10 @@ impl ServerFileSystem for StorageClient {
             })
             .await?;
 
-        let createReply = result.into_inner();
-        let attr = createReply.file_attr;
-        let fh = createReply.fh;
-        let error_code = createReply.errcode;
+        let create_reply = result.into_inner();
+        let attr = create_reply.file_attr;
+        let fh = create_reply.fh;
+        let error_code = create_reply.errcode;
         if error_code != SUCCESS {
             return Ok((None, error_code));
         }
@@ -344,9 +348,9 @@ impl ServerFileSystem for StorageClient {
                 ino: ino,
             })
             .await?;
-        let getattrReply = result.into_inner();
-        let attr = getattrReply.file_attr;
-        let error_code = getattrReply.errcode;
+        let getattr_reply = result.into_inner();
+        let attr = getattr_reply.file_attr;
+        let error_code = getattr_reply.errcode;
         if error_code != SUCCESS {
             return Ok((None, error_code));
         }
@@ -374,10 +378,10 @@ impl ServerFileSystem for StorageClient {
                 flags: _flags,
             })
             .await?;
-        let openReply = result.into_inner();
-        let fh = openReply.fh;
-        let open_flag = openReply.openflag;
-        let error_code = openReply.errcode;
+        let open_reply = result.into_inner();
+        let fh = open_reply.fh;
+        let open_flag = open_reply.openflag;
+        let error_code = open_reply.errcode;
         if error_code != SUCCESS {
             return Ok((None, error_code));
         }
@@ -392,7 +396,7 @@ impl ServerFileSystem for StorageClient {
         _flags: i32,
         _lock_owner: Option<u64>,
         _flush: bool,
-    ) -> TritonFileResult<(c_int)> {
+    ) -> TritonFileResult<c_int> {
         let freq = FRequest {
             uid: _req.uid,
             gid: _req.gid,
@@ -425,22 +429,18 @@ impl ServerFileSystem for StorageClient {
         _value: &[u8],
         flags: i32,
         position: u32,
-    ) -> TritonFileResult<(c_int)> {
+    ) -> TritonFileResult<c_int> {
         let freq = FRequest {
             uid: _req.uid,
             gid: _req.gid,
             pid: _req.pid,
         };
-
-        let name_string = name.to_str().unwrap().to_string();
         let mut client = self.disfuser_client().await;
-        
-        let value_string = std::str::from_utf8(_value).unwrap().to_string();
         let in_stream = setxattr_requests_iter(
             freq,
             ino,
-            name_string,
-            value_string,
+            name,
+            _value,
             flags,
             position,
         );
@@ -480,7 +480,7 @@ impl ServerFileSystem for StorageClient {
 
         let mut received: Vec<String> = Vec::new();
         let mut error_code: c_int;
-        let mut size: u32; 
+        let mut size: u32 = 0; 
         while let Some(item) = stream.next().await {
             let reply = item.unwrap();
             received.push(reply.data);
@@ -518,7 +518,7 @@ impl ServerFileSystem for StorageClient {
 
         let mut received: Vec<String> = Vec::new();
         let mut error_code: c_int;
-        let mut size: u32; 
+        let mut size: u32 = 0;
         while let Some(item) = stream.next().await {
             let reply = item.unwrap();
             received.push(reply.data);
@@ -528,9 +528,12 @@ impl ServerFileSystem for StorageClient {
                 return Ok((None, error_code));
             }
         }
+        let joined_received = received.join("");
+        Ok((Some((joined_received, size)), SUCCESS))
+
     }
 
-    async fn access(&self, _req: &FileRequest, ino: u64, mask: i32) -> TritonFileResult<(c_int)> {
+    async fn access(&self, _req: &FileRequest, ino: u64, mask: i32) -> TritonFileResult<c_int> {
         let freq = FRequest {
             uid: _req.uid,
             gid: _req.gid,
@@ -559,7 +562,7 @@ impl ServerFileSystem for StorageClient {
         newparent: u64,
         newname: &OsStr,
         flags: u32,
-    ) -> TritonFileResult<(c_int)> {
+    ) -> TritonFileResult<c_int> {
         let freq = FRequest {
             uid: _req.uid,
             gid: _req.gid,
@@ -607,6 +610,61 @@ impl ServerFileSystem for StorageClient {
             gid: _req.gid,
             pid: _req.pid,
         };
+
+        let atime_secs: Option<i64>; 
+        let atime_nsecs: Option<u32>; 
+        (atime_secs, atime_nsecs) = match _atime{
+            Some(timeornow) => match timeornow{
+                TimeOrNow::SpecificTime(system_time) =>{
+                    match system_time.duration_since(UNIX_EPOCH) {
+                        Ok(duration) => (Some(duration.as_secs() as i64), Some(duration.subsec_nanos())),
+                        Err(before_epoch_error) => (
+                            Some(-(before_epoch_error.duration().as_secs() as i64)),
+                            Some(before_epoch_error.duration().subsec_nanos()),
+                        ),
+                    }
+                }
+                TimeOrNow::Now =>{
+                    let system_time = SystemTime::now(); 
+                    match system_time.duration_since(UNIX_EPOCH) {
+                        Ok(duration) => (Some(duration.as_secs() as i64), Some(duration.subsec_nanos())),
+                        Err(before_epoch_error) => (
+                            Some(-(before_epoch_error.duration().as_secs() as i64)),
+                            Some(before_epoch_error.duration().subsec_nanos()),
+                        ),
+                    }
+                }
+            }
+            None => (None, None)
+        };
+
+        let mtime_secs: Option<i64>; 
+        let mtime_nsecs: Option<u32>; 
+        (mtime_secs, mtime_nsecs) = match _mtime{
+            Some(timeornow) => match timeornow{
+                TimeOrNow::SpecificTime(system_time) =>{
+                    match system_time.duration_since(UNIX_EPOCH) {
+                        Ok(duration) => (Some(duration.as_secs() as i64), Some(duration.subsec_nanos())),
+                        Err(before_epoch_error) => (
+                            Some(-(before_epoch_error.duration().as_secs() as i64)),
+                            Some(before_epoch_error.duration().subsec_nanos()),
+                        ),
+                    }
+                }
+                TimeOrNow::Now =>{
+                    let system_time = SystemTime::now(); 
+                    match system_time.duration_since(UNIX_EPOCH) {
+                        Ok(duration) => (Some(duration.as_secs() as i64), Some(duration.subsec_nanos())),
+                        Err(before_epoch_error) => (
+                            Some(-(before_epoch_error.duration().as_secs() as i64)),
+                            Some(before_epoch_error.duration().subsec_nanos()),
+                        ),
+                    }
+                }
+            }
+            None => (None, None)
+        };
+
         let mut client = self.disfuser_client().await;
         let result = client
             .setattr(Setattr {
@@ -618,14 +676,19 @@ impl ServerFileSystem for StorageClient {
                 size: size,
                 fh: fh,
                 flags: flags,
+                atime_secs, 
+                atime_nsecs, 
+                mtime_secs, 
+                mtime_nsecs 
             })
             .await?;
-        let setattrReply = result.into_inner();
-        let error_code = setattrReply.errcode;
+
+        let setattr_reply = result.into_inner();
+        let error_code = setattr_reply.errcode;
         if error_code != SUCCESS {
             return Ok((None, error_code));
         }
-        let received_attr = setattrReply.file_attr;
+        let received_attr = setattr_reply.file_attr;
         let fileattr = serde_json::from_str::<FileAttr>(&received_attr).unwrap();
         Ok((Some(fileattr), SUCCESS))
     }

@@ -323,11 +323,12 @@ async fn test_server_setup() -> TritonFileResult<()> {
         options.push(MountOption::AllowRoot);
     }
 
+    let front =  Front::new(
+        bin_client,
+    );
     let result = fuser::mount2(
-        Front::new(
-            bin_client,
-        ),
-        "/Users/lynnz/Desktop/tmp/",
+        front, 
+        "/Users/stella/Desktop/tmp/",
         &options,
     );
     if let Err(e) = result {
@@ -338,6 +339,7 @@ async fn test_server_setup() -> TritonFileResult<()> {
             std::process::exit(2);
         }
     }
+
     Ok(())
 }
 
