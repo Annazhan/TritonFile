@@ -18,18 +18,13 @@ use tribbler::error::{TritonFileError, TritonFileResult, SUCCESS};
 use tribbler::storage;
 
 pub struct Front {
-    // original Front
     binstore: Box<dyn storage::BinStorage>,
     clock: atomic::AtomicU64,
-
-    runtime: tokio::runtime::Runtime,
+    runtime: tokio::runtime::Handle,
 }
 
 impl Front {
-    pub fn new(binstore: Box<dyn storage::BinStorage>) -> Front {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-        .build()
-        .unwrap();
+    pub fn new(binstore: Box<dyn storage::BinStorage>, runtime: tokio::runtime::Handle) -> Front {
         #[cfg(feature = "abi-7-26")]
         {
             Front {

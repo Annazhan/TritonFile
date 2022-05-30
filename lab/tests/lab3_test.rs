@@ -320,17 +320,19 @@ async fn test_server_setup() -> TritonFileResult<()> {
         options.push(MountOption::AutoUnmount);
         options.push(MountOption::AllowOther);
         options.push(MountOption::Dev);
-        options.push(MountOption::AllowRoot);
+        // options.push(MountOption::AllowRoot);
     }
-
+    let handle = Handle::current();
     let front =  Front::new(
         bin_client,
+        handle
     );
     let result = fuser::mount2(
         front, 
         "/Users/stella/Desktop/tmp/",
         &options,
     );
+    dbg!(&result);
     if let Err(e) = result {
         // Return a special error code for permission denied, which usually indicates that
         // "user_allow_other" is missing from /etc/fuse.conf
@@ -339,7 +341,6 @@ async fn test_server_setup() -> TritonFileResult<()> {
             std::process::exit(2);
         }
     }
-
     Ok(())
 }
 
