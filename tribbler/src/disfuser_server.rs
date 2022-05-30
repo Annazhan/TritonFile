@@ -9,10 +9,11 @@ use crate::error::SUCCESS;
 use crate::storage::FileRequest;
 use crate::storage::Storage;
 use async_trait::async_trait;
-use fuser::{BackgroundSession, FileAttr, MountOption, Request};
+use fuser::{BackgroundSession, FileAttr, MountOption, Request, TimeOrNow};
 use std::cmp::min;
 use std::ffi::OsString;
 use std::pin::Pin;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio::time::Duration;
 use tokio_stream::wrappers::ReceiverStream;
@@ -78,6 +79,38 @@ fn getxattr_response_iter(msg: String, size: u32, errcode: i32) -> Vec<GetxattrR
         vec.push(element.clone());
     }
     return vec;
+}
+
+fn listxattr_response_iter(msg: String, size: u32, errcode: i32) -> Vec<ListxattrReply> {
+    let data_len = msg.len();
+    let mut n = data_len / slice_size;
+    if data_len % slice_size != 0 {
+        n += 1;
+    }
+
+    let mut vec: Vec<ListxattrReply> = Vec::new();
+    let mut start = 0;
+    let mut end = 0;
+
+    for i in 0..n {
+        start = i * slice_size;
+        end = min(start + slice_size, data_len);
+        let element = ListxattrReply {
+            data: msg.clone()[start..end].to_string(),
+            size: size,
+            errcode: errcode,
+        };
+        vec.push(element.clone());
+    }
+    return vec;
+}
+
+fn system_time_from_time(secs: i64, nsecs: u32) -> SystemTime {
+    if secs >= 0 {
+        UNIX_EPOCH + Duration::new(secs as u64, nsecs)
+    } else {
+        UNIX_EPOCH - Duration::new((-secs) as u64, nsecs)
+    }
 }
 
 impl DisfuserServer {
@@ -511,21 +544,174 @@ impl Disfuser for DisfuserServer {
         &self,
         request: tonic::Request<Listxattr>,
     ) -> Result<tonic::Response<Self::listxattrStream>, tonic::Status> {
+        let r_inner = request.into_inner();
+
+        let request = FileRequest {
+            uid: r_inner.frequest.clone().uid,
+            gid: r_inner.frequest.clone().gid,
+            pid: r_inner.frequest.clone().pid,
+        };
+
+        let result = self
+            .filesystem
+            .listxattr(&request, r_inner.ino, r_inner.size)
+            .await;
+        let mut reply = Vec::new();
+        match result {
+            Ok(value) => {
+                if value.1 != SUCCESS {
+                    reply = vec![ListxattrReply {
+                        data: "".to_string(),
+                        size: 0,
+                        errcode: value.1,
+                    }];
+                } else {
+                    // divide the message into appropriate size, and make a vector
+                    let content = value.0.clone().unwrap().0;
+                    let size = value.0.clone().unwrap().1;
+                    reply = listxattr_response_iter(content, size, SUCCESS);
+                }
+            }
+            Err(_) => {}
+        };
+
+        let mut stream = Box::pin(tokio_stream::iter(reply).throttle(Duration::from_millis(200)));
+        let (tx, rx) = mpsc::channel(128);
+
+        tokio::spawn(async move {
+            while let Some(item) = stream.next().await {
+                match tx.send(Result::<_, Status>::Ok(item)).await {
+                    Ok(_) => {
+                        // item (server response) was queued to be send to client
+                    }
+                    Err(_item) => {
+                        // output_stream was build from rx and both are dropped
+                        break;
+                    }
+                }
+            }
+            println!("\tclient disconnected");
+        });
+
+        let output_stream = ReceiverStream::new(rx);
+        Ok(Response::new(
+            Box::pin(output_stream) as Self::listxattrStream
+        ))
     }
     async fn access(
         &self,
         request: tonic::Request<Access>,
     ) -> Result<tonic::Response<AccessReply>, tonic::Status> {
+        let request_inner = request.into_inner();
+        let mut file_request = FileRequest {
+            uid: request_inner.frequest.clone().uid,
+            gid: request_inner.frequest.clone().gid,
+            pid: request_inner.frequest.clone().pid,
+        };
+        let result = self
+            .filesystem
+            .access(&file_request, request_inner.ino, request_inner.mask)
+            .await;
+
+        // change fileAttr to string
+        match result {
+            Ok(value) => Ok(Response::new(AccessReply { errcode: value })),
+            Err(_) => Err(Status::invalid_argument("getattr failed")),
+        }
     }
+
     async fn rename(
         &self,
         request: tonic::Request<Rename>,
     ) -> Result<tonic::Response<RenameReply>, tonic::Status> {
+        let request_inner = request.into_inner();
+        let mut file_request = FileRequest {
+            uid: request_inner.frequest.clone().uid,
+            gid: request_inner.frequest.clone().gid,
+            pid: request_inner.frequest.clone().pid,
+        };
+
+        let mut old_name = OsString::new();
+        old_name.push(request_inner.name);
+
+        let mut new_name = OsString::new();
+        new_name.push(request_inner.newname);
+
+        let result = self
+            .filesystem
+            .rename(
+                &file_request,
+                request_inner.parent,
+                &old_name.as_os_str(),
+                request_inner.newparent,
+                &new_name.as_os_str(),
+                request_inner.flags,
+            )
+            .await;
+
+        // change fileAttr to string
+        match result {
+            Ok(value) => Ok(Response::new(RenameReply { errcode: value })),
+            Err(_) => Err(Status::invalid_argument("rename failed")),
+        }
     }
 
     async fn setattr(
         &self,
         request: tonic::Request<Setattr>,
     ) -> Result<tonic::Response<SetattrReply>, tonic::Status> {
+        let request_inner = request.into_inner();
+        let mut file_request = FileRequest {
+            uid: request_inner.frequest.clone().uid,
+            gid: request_inner.frequest.clone().gid,
+            pid: request_inner.frequest.clone().pid,
+        };
+
+        let atime = match request_inner.atime_secs {
+            Some(atime_secs) => Some(TimeOrNow::SpecificTime(system_time_from_time(
+                atime_secs,
+                request_inner.atime_nsecs.unwrap(),
+            ))),
+            None => None,
+        };
+
+        let mtime = match request_inner.mtime_secs {
+            Some(mtime_secs) => Some(TimeOrNow::SpecificTime(system_time_from_time(
+                mtime_secs,
+                request_inner.mtime_nsecs.unwrap(),
+            ))),
+            None => None,
+        };
+
+        let empty_time = Some(system_time_from_time(0, 0));
+
+        let result = self
+            .filesystem
+            .setattr(
+                &file_request,
+                request_inner.ino,
+                request_inner.mode,
+                request_inner.uid,
+                request_inner.gid,
+                request_inner.size,
+                atime,
+                mtime,
+                empty_time,
+                request_inner.fh,
+                empty_time,
+                empty_time,
+                empty_time,
+                request_inner.flags,
+            )
+            .await;
+
+        // change fileAttr to string
+        match result {
+            Ok(value) => Ok(Response::new(SetattrReply {
+                file_attr: serde_json::to_string(&value.0.clone().unwrap()).unwrap(),
+                errcode: value.1,
+            })),
+            Err(_) => Err(Status::invalid_argument("setattr failed")),
+        }
     }
 }

@@ -192,16 +192,16 @@ pub struct Setattr {
     pub size: ::core::option::Option<u64>,
     #[prost(uint64, optional, tag = "7")]
     pub fh: ::core::option::Option<u64>,
-    #[prost(uint32, required, tag = "8")]
-    pub flags: u32,
+    #[prost(uint32, optional, tag = "8")]
+    pub flags: ::core::option::Option<u32>,
     #[prost(int64, optional, tag = "9")]
     pub atime_secs: ::core::option::Option<i64>,
-    #[prost(int64, optional, tag = "10")]
-    pub atime_nsecs: ::core::option::Option<i64>,
+    #[prost(uint32, optional, tag = "10")]
+    pub atime_nsecs: ::core::option::Option<u32>,
     #[prost(int64, optional, tag = "11")]
-    pub ctime_secs: ::core::option::Option<i64>,
-    #[prost(int64, optional, tag = "12")]
-    pub ctime_nsecs: ::core::option::Option<i64>,
+    pub mtime_secs: ::core::option::Option<i64>,
+    #[prost(uint32, optional, tag = "12")]
+    pub mtime_nsecs: ::core::option::Option<u32>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Reply {
