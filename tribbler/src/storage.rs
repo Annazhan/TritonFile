@@ -769,7 +769,7 @@ impl ServerFileSystem for RemoteFileSystem {
                 return Ok((None, error));
             }
 
-            /// check size to get usize
+            // check size to get usize
             if let Some(data) = attrs.xattrs.get(key.as_bytes()) {
                 if size == 0 {
                     return Ok((
@@ -850,7 +850,7 @@ impl ServerFileSystem for RemoteFileSystem {
         name: &OsStr,
         new_parent: u64,
         new_name: &OsStr,
-        flags: u32,
+        _flags: u32,
     ) -> TritonFileResult<(c_int)> {
         let fs = &self.fs;
 
