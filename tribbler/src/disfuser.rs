@@ -87,6 +87,123 @@ pub struct Unlink {
     pub name: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Getattr {
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
+    pub ino: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Open {
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
+    pub ino: u64,
+    #[prost(int32, required, tag = "3")]
+    pub flags: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Release {
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
+    pub ino: u64,
+    #[prost(uint64, required, tag = "3")]
+    pub fh: u64,
+    #[prost(int32, required, tag = "4")]
+    pub flags: i32,
+    #[prost(uint64, optional, tag = "5")]
+    pub lock_owner: ::core::option::Option<u64>,
+    #[prost(bool, required, tag = "6")]
+    pub flush: bool,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Setxattr {
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
+    pub ino: u64,
+    #[prost(string, required, tag = "3")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, required, tag = "4")]
+    pub value: ::prost::alloc::string::String,
+    #[prost(int32, required, tag = "5")]
+    pub flags: i32,
+    #[prost(uint32, required, tag = "6")]
+    pub position: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Getxattr {
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
+    pub ino: u64,
+    #[prost(string, required, tag = "3")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(uint32, required, tag = "4")]
+    pub size: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Listxattr {
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
+    pub ino: u64,
+    #[prost(uint32, required, tag = "3")]
+    pub size: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Access {
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
+    pub ino: u64,
+    #[prost(int32, required, tag = "3")]
+    pub mask: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Rename {
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
+    pub parent: u64,
+    #[prost(string, required, tag = "3")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(uint64, required, tag = "4")]
+    pub newparent: u64,
+    #[prost(string, required, tag = "5")]
+    pub newname: ::prost::alloc::string::String,
+    #[prost(uint32, required, tag = "6")]
+    pub flags: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Setattr {
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
+    pub ino: u64,
+    #[prost(uint32, optional, tag = "3")]
+    pub mode: ::core::option::Option<u32>,
+    #[prost(uint32, optional, tag = "4")]
+    pub uid: ::core::option::Option<u32>,
+    #[prost(uint32, optional, tag = "5")]
+    pub gid: ::core::option::Option<u32>,
+    #[prost(uint64, optional, tag = "6")]
+    pub size: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "7")]
+    pub fh: ::core::option::Option<u64>,
+    #[prost(uint32, optional, tag = "8")]
+    pub flags: ::core::option::Option<u32>,
+    #[prost(int64, optional, tag = "9")]
+    pub atime_secs: ::core::option::Option<i64>,
+    #[prost(uint32, optional, tag = "10")]
+    pub atime_nsecs: ::core::option::Option<u32>,
+    #[prost(int64, optional, tag = "11")]
+    pub mtime_secs: ::core::option::Option<i64>,
+    #[prost(uint32, optional, tag = "12")]
+    pub mtime_nsecs: ::core::option::Option<u32>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Reply {
     /// \[u8\] or fileAttr string
     #[prost(string, required, tag = "1")]
@@ -114,6 +231,67 @@ pub struct CreateReply {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UnlinkReply {
     #[prost(int32, required, tag = "1")]
+    pub errcode: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetattrReply {
+    #[prost(string, required, tag = "1")]
+    pub file_attr: ::prost::alloc::string::String,
+    #[prost(int32, required, tag = "2")]
+    pub errcode: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OpenReply {
+    #[prost(uint64, required, tag = "1")]
+    pub fh: u64,
+    #[prost(uint32, required, tag = "2")]
+    pub openflag: u32,
+    #[prost(int32, required, tag = "3")]
+    pub errcode: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReleaseReply {
+    #[prost(int32, required, tag = "1")]
+    pub errcode: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetxattrReply {
+    #[prost(int32, required, tag = "1")]
+    pub errcode: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetxattrReply {
+    #[prost(string, required, tag = "1")]
+    pub data: ::prost::alloc::string::String,
+    #[prost(uint32, required, tag = "2")]
+    pub size: u32,
+    #[prost(int32, required, tag = "3")]
+    pub errcode: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListxattrReply {
+    #[prost(string, required, tag = "1")]
+    pub data: ::prost::alloc::string::String,
+    #[prost(uint32, required, tag = "2")]
+    pub size: u32,
+    #[prost(int32, required, tag = "3")]
+    pub errcode: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AccessReply {
+    #[prost(int32, required, tag = "1")]
+    pub errcode: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RenameReply {
+    #[prost(int32, required, tag = "1")]
+    pub errcode: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetattrReply {
+    #[prost(string, required, tag = "1")]
+    pub file_attr: ::prost::alloc::string::String,
+    #[prost(int32, required, tag = "2")]
     pub errcode: i32,
 }
 #[doc = r" Generated client implementations."]
@@ -250,6 +428,140 @@ pub mod disfuser_client {
             let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/unlink");
             self.inner.unary(request.into_request(), path, codec).await
         }
+        pub async fn open(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Open>,
+        ) -> Result<tonic::Response<super::OpenReply>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/open");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn getattr(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Getattr>,
+        ) -> Result<tonic::Response<super::GetattrReply>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/getattr");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn access(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Access>,
+        ) -> Result<tonic::Response<super::AccessReply>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/access");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn rename(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Rename>,
+        ) -> Result<tonic::Response<super::RenameReply>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/rename");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn release(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Release>,
+        ) -> Result<tonic::Response<super::ReleaseReply>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/release");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn setxattr(
+            &mut self,
+            request: impl tonic::IntoStreamingRequest<Message = super::Setxattr>,
+        ) -> Result<tonic::Response<super::SetxattrReply>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/setxattr");
+            self.inner
+                .client_streaming(request.into_streaming_request(), path, codec)
+                .await
+        }
+        pub async fn getxattr(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Getxattr>,
+        ) -> Result<tonic::Response<tonic::codec::Streaming<super::GetxattrReply>>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/getxattr");
+            self.inner
+                .server_streaming(request.into_request(), path, codec)
+                .await
+        }
+        pub async fn listxattr(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Listxattr>,
+        ) -> Result<tonic::Response<tonic::codec::Streaming<super::ListxattrReply>>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/listxattr");
+            self.inner
+                .server_streaming(request.into_request(), path, codec)
+                .await
+        }
+        pub async fn setattr(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Setattr>,
+        ) -> Result<tonic::Response<super::SetattrReply>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/setattr");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
     }
 }
 #[doc = r" Generated server implementations."]
@@ -283,6 +595,50 @@ pub mod disfuser_server {
             &self,
             request: tonic::Request<super::Unlink>,
         ) -> Result<tonic::Response<super::UnlinkReply>, tonic::Status>;
+        async fn open(
+            &self,
+            request: tonic::Request<super::Open>,
+        ) -> Result<tonic::Response<super::OpenReply>, tonic::Status>;
+        async fn getattr(
+            &self,
+            request: tonic::Request<super::Getattr>,
+        ) -> Result<tonic::Response<super::GetattrReply>, tonic::Status>;
+        async fn access(
+            &self,
+            request: tonic::Request<super::Access>,
+        ) -> Result<tonic::Response<super::AccessReply>, tonic::Status>;
+        async fn rename(
+            &self,
+            request: tonic::Request<super::Rename>,
+        ) -> Result<tonic::Response<super::RenameReply>, tonic::Status>;
+        async fn release(
+            &self,
+            request: tonic::Request<super::Release>,
+        ) -> Result<tonic::Response<super::ReleaseReply>, tonic::Status>;
+        async fn setxattr(
+            &self,
+            request: tonic::Request<tonic::Streaming<super::Setxattr>>,
+        ) -> Result<tonic::Response<super::SetxattrReply>, tonic::Status>;
+        #[doc = "Server streaming response type for the getxattr method."]
+        type getxattrStream: futures_core::Stream<Item = Result<super::GetxattrReply, tonic::Status>>
+            + Send
+            + 'static;
+        async fn getxattr(
+            &self,
+            request: tonic::Request<super::Getxattr>,
+        ) -> Result<tonic::Response<Self::getxattrStream>, tonic::Status>;
+        #[doc = "Server streaming response type for the listxattr method."]
+        type listxattrStream: futures_core::Stream<Item = Result<super::ListxattrReply, tonic::Status>>
+            + Send
+            + 'static;
+        async fn listxattr(
+            &self,
+            request: tonic::Request<super::Listxattr>,
+        ) -> Result<tonic::Response<Self::listxattrStream>, tonic::Status>;
+        async fn setattr(
+            &self,
+            request: tonic::Request<super::Setattr>,
+        ) -> Result<tonic::Response<super::SetattrReply>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct DisfuserServer<T: Disfuser> {
@@ -458,6 +814,280 @@ pub mod disfuser_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = unlinkSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/disfuser.disfuser/open" => {
+                    #[allow(non_camel_case_types)]
+                    struct openSvc<T: Disfuser>(pub Arc<T>);
+                    impl<T: Disfuser> tonic::server::UnaryService<super::Open> for openSvc<T> {
+                        type Response = super::OpenReply;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(&mut self, request: tonic::Request<super::Open>) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).open(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = openSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/disfuser.disfuser/getattr" => {
+                    #[allow(non_camel_case_types)]
+                    struct getattrSvc<T: Disfuser>(pub Arc<T>);
+                    impl<T: Disfuser> tonic::server::UnaryService<super::Getattr> for getattrSvc<T> {
+                        type Response = super::GetattrReply;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::Getattr>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).getattr(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = getattrSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/disfuser.disfuser/access" => {
+                    #[allow(non_camel_case_types)]
+                    struct accessSvc<T: Disfuser>(pub Arc<T>);
+                    impl<T: Disfuser> tonic::server::UnaryService<super::Access> for accessSvc<T> {
+                        type Response = super::AccessReply;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(&mut self, request: tonic::Request<super::Access>) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).access(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = accessSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/disfuser.disfuser/rename" => {
+                    #[allow(non_camel_case_types)]
+                    struct renameSvc<T: Disfuser>(pub Arc<T>);
+                    impl<T: Disfuser> tonic::server::UnaryService<super::Rename> for renameSvc<T> {
+                        type Response = super::RenameReply;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(&mut self, request: tonic::Request<super::Rename>) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).rename(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = renameSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/disfuser.disfuser/release" => {
+                    #[allow(non_camel_case_types)]
+                    struct releaseSvc<T: Disfuser>(pub Arc<T>);
+                    impl<T: Disfuser> tonic::server::UnaryService<super::Release> for releaseSvc<T> {
+                        type Response = super::ReleaseReply;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::Release>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).release(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = releaseSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/disfuser.disfuser/setxattr" => {
+                    #[allow(non_camel_case_types)]
+                    struct setxattrSvc<T: Disfuser>(pub Arc<T>);
+                    impl<T: Disfuser> tonic::server::ClientStreamingService<super::Setxattr> for setxattrSvc<T> {
+                        type Response = super::SetxattrReply;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<tonic::Streaming<super::Setxattr>>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).setxattr(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = setxattrSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.client_streaming(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/disfuser.disfuser/getxattr" => {
+                    #[allow(non_camel_case_types)]
+                    struct getxattrSvc<T: Disfuser>(pub Arc<T>);
+                    impl<T: Disfuser> tonic::server::ServerStreamingService<super::Getxattr> for getxattrSvc<T> {
+                        type Response = super::GetxattrReply;
+                        type ResponseStream = T::getxattrStream;
+                        type Future =
+                            BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::Getxattr>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).getxattr(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = getxattrSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.server_streaming(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/disfuser.disfuser/listxattr" => {
+                    #[allow(non_camel_case_types)]
+                    struct listxattrSvc<T: Disfuser>(pub Arc<T>);
+                    impl<T: Disfuser> tonic::server::ServerStreamingService<super::Listxattr> for listxattrSvc<T> {
+                        type Response = super::ListxattrReply;
+                        type ResponseStream = T::listxattrStream;
+                        type Future =
+                            BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::Listxattr>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).listxattr(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = listxattrSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.server_streaming(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/disfuser.disfuser/setattr" => {
+                    #[allow(non_camel_case_types)]
+                    struct setattrSvc<T: Disfuser>(pub Arc<T>);
+                    impl<T: Disfuser> tonic::server::UnaryService<super::Setattr> for setattrSvc<T> {
+                        type Response = super::SetattrReply;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::Setattr>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).setattr(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = setattrSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
                             accept_compression_encodings,
