@@ -322,14 +322,18 @@ async fn test_server_setup() -> TritonFileResult<()> {
         options.push(MountOption::Dev);
         // options.push(MountOption::AllowRoot);
     }
-    let handle = Handle::current();
+    // let handle = Handle::current();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+    .enable_all()
+    .build()
+    .unwrap();
     let front =  Front::new(
         bin_client,
-        handle
+        runtime
     );
     let result = fuser::mount2(
         front, 
-        "/Users/stella/Desktop/tmp/",
+        "/Users/stella/Desktop/tmp",
         &options,
     );
     dbg!(&result);

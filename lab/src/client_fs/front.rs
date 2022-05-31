@@ -20,11 +20,11 @@ use tribbler::storage;
 pub struct Front {
     binstore: Box<dyn storage::BinStorage>,
     clock: atomic::AtomicU64,
-    runtime: tokio::runtime::Handle,
+    runtime: tokio::runtime::Runtime,
 }
 
 impl Front {
-    pub fn new(binstore: Box<dyn storage::BinStorage>, runtime: tokio::runtime::Handle) -> Front {
+    pub fn new(binstore: Box<dyn storage::BinStorage>, runtime: tokio::runtime::Runtime) -> Front {
         #[cfg(feature = "abi-7-26")]
         {
             Front {
