@@ -162,6 +162,11 @@ pub struct Access {
     pub mask: i32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Init {
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Rename {
     #[prost(message, required, tag = "1")]
     pub frequest: FRequest,
@@ -338,6 +343,11 @@ pub struct ListRemoveResponse {
     #[prost(uint32, required, tag = "1")]
     pub removed: u32,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InitReply {
+    #[prost(int32, required, tag = "1")]
+    pub errcode: i32,
+}
 #[doc = r" Generated client implementations."]
 pub mod disfuser_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
@@ -397,6 +407,20 @@ pub mod disfuser_client {
         pub fn accept_gzip(mut self) -> Self {
             self.inner = self.inner.accept_gzip();
             self
+        }
+        pub async fn init(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Init>,
+        ) -> Result<tonic::Response<super::InitReply>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/init");
+            self.inner.unary(request.into_request(), path, codec).await
         }
         pub async fn read(
             &mut self,
@@ -727,6 +751,10 @@ pub mod disfuser_server {
     #[doc = "Generated trait containing gRPC methods that should be implemented for use with DisfuserServer."]
     #[async_trait]
     pub trait Disfuser: Send + Sync + 'static {
+        async fn init(
+            &self,
+            request: tonic::Request<super::Init>,
+        ) -> Result<tonic::Response<super::InitReply>, tonic::Status>;
         #[doc = "Server streaming response type for the read method."]
         type readStream: futures_core::Stream<Item = Result<super::Reply, tonic::Status>>
             + Send
@@ -867,6 +895,34 @@ pub mod disfuser_server {
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             let inner = self.inner.clone();
             match req.uri().path() {
+                "/disfuser.disfuser/init" => {
+                    #[allow(non_camel_case_types)]
+                    struct initSvc<T: Disfuser>(pub Arc<T>);
+                    impl<T: Disfuser> tonic::server::UnaryService<super::Init> for initSvc<T> {
+                        type Response = super::InitReply;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(&mut self, request: tonic::Request<super::Init>) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).init(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = initSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
                 "/disfuser.disfuser/read" => {
                     #[allow(non_camel_case_types)]
                     struct readSvc<T: Disfuser>(pub Arc<T>);
