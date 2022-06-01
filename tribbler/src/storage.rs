@@ -281,27 +281,48 @@ pub struct RemoteFileSystem {
 impl RemoteFileSystem {
     /// Creates a new instance of [MemStorage]
     pub fn new(num: usize) -> RemoteFileSystem {
-        let mut options = vec![MountOption::FSName(format!("fuser{}", num))];
-        #[cfg(feature = "abi-7-26")]
-        {
-            options.push(MountOption::AutoUnmount);
-        }
-        #[cfg(not(feature = "abi-7-26"))]
-        {
-            options.push(MountOption::AutoUnmount);
-            options.push(MountOption::AllowOther);
-        }
-
         if !fs::metadata(format!("tmp/{}", num)).is_ok() {
             info!("try to create metadata file");
             fs::create_dir_all(format!("tmp/{}", num)).unwrap();
+        }
+
+        let fs = SimpleFS::new(format!("tmp/{}", num), false, false);
+
+        if !fs::metadata(Path::new(&fs.data_dir).join("inodes")).is_ok() {
+            info!("try to create metadata file");
+            fs::create_dir_all(Path::new(&fs.data_dir).join("inodes")).unwrap();
+        }
+        if !fs::metadata(Path::new(&fs.data_dir).join("contents")).is_ok() {
+            info!("try to create metadata file");
+            fs::create_dir_all(Path::new(&fs.data_dir).join("contents")).unwrap();
+        }
+        if fs.get_inode(FUSE_ROOT_ID).is_err() {
+            // Initialize with empty filesystem
+            let root = InodeAttributes {
+                inode: FUSE_ROOT_ID,
+                open_file_handles: 0,
+                size: 0,
+                last_accessed: time_now(),
+                last_modified: time_now(),
+                last_metadata_changed: time_now(),
+                kind: FileKind::Directory,
+                mode: 0o777,
+                hardlinks: 2,
+                uid: 0,
+                gid: 0,
+                xattrs: Default::default(),
+            };
+            fs.write_inode(&root);
+            let mut entries = BTreeMap::new();
+            entries.insert(b".".to_vec(), (FUSE_ROOT_ID, FileKind::Directory));
+            fs.write_directory_content(FUSE_ROOT_ID, entries);
         }
 
         RemoteFileSystem {
             kvs: RwLock::new(HashMap::new()),
             kv_list: RwLock::new(HashMap::new()),
             clock: RwLock::new(0),
-            fs: SimpleFS::new(format!("tmp/{}", num), false, false),
+            fs,
         }
     }
 }
@@ -402,34 +423,31 @@ impl KeyList for RemoteFileSystem {
 #[async_trait]
 impl ServerFileSystem for RemoteFileSystem {
     async fn init(&self, _req: &FileRequest) -> TritonFileResult<c_int> {
-        let fs = &self.fs;
+        // let fs = &self.fs;
 
-        #[cfg(feature = "abi-7-26")]
-        config.add_capabilities(FUSE_HANDLE_KILLPRIV).unwrap();
-
-        fs::create_dir_all(Path::new(&fs.data_dir).join("inodes")).unwrap();
-        fs::create_dir_all(Path::new(&fs.data_dir).join("contents")).unwrap();
-        if fs.get_inode(FUSE_ROOT_ID).is_err() {
-            // Initialize with empty filesystem
-            let root = InodeAttributes {
-                inode: FUSE_ROOT_ID,
-                open_file_handles: 0,
-                size: 0,
-                last_accessed: time_now(),
-                last_modified: time_now(),
-                last_metadata_changed: time_now(),
-                kind: FileKind::Directory,
-                mode: 0o777,
-                hardlinks: 2,
-                uid: 0,
-                gid: 0,
-                xattrs: Default::default(),
-            };
-            fs.write_inode(&root);
-            let mut entries = BTreeMap::new();
-            entries.insert(b".".to_vec(), (FUSE_ROOT_ID, FileKind::Directory));
-            fs.write_directory_content(FUSE_ROOT_ID, entries);
-        }
+        // fs::create_dir_all(Path::new(&fs.data_dir).join("inodes")).unwrap();
+        // fs::create_dir_all(Path::new(&fs.data_dir).join("contents")).unwrap();
+        // if fs.get_inode(FUSE_ROOT_ID).is_err() {
+        //     // Initialize with empty filesystem
+        //     let root = InodeAttributes {
+        //         inode: FUSE_ROOT_ID,
+        //         open_file_handles: 0,
+        //         size: 0,
+        //         last_accessed: time_now(),
+        //         last_modified: time_now(),
+        //         last_metadata_changed: time_now(),
+        //         kind: FileKind::Directory,
+        //         mode: 0o777,
+        //         hardlinks: 2,
+        //         uid: 0,
+        //         gid: 0,
+        //         xattrs: Default::default(),
+        //     };
+        //     fs.write_inode(&root);
+        //     let mut entries = BTreeMap::new();
+        //     entries.insert(b".".to_vec(), (FUSE_ROOT_ID, FileKind::Directory));
+        //     fs.write_directory_content(FUSE_ROOT_ID, entries);
+        // }
         Ok(SUCCESS)
     }
 
