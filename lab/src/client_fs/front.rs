@@ -4,7 +4,7 @@
 use fuser::consts::FUSE_HANDLE_KILLPRIV;
 #[cfg(feature = "abi-7-31")]
 use fuser::consts::FUSE_WRITE_KILL_PRIV;
-use fuser::{Filesystem, ReplyCreate, ReplyData, ReplyEmpty, ReplyEntry, ReplyWrite, Request, TimeOrNow, ReplyAttr, ReplyXattr, ReplyOpen, KernelConfig};
+use fuser::{Filesystem, ReplyCreate, ReplyData, ReplyEmpty, ReplyEntry, ReplyWrite, Request, TimeOrNow, ReplyAttr, ReplyXattr, ReplyOpen, KernelConfig, ReplyStatfs};
 use libc::c_int;
 use log::info;
 #[cfg(feature = "abi-7-26")]
@@ -18,6 +18,10 @@ use std::sync::atomic;
 
 use tribbler::error::{TritonFileError, TritonFileResult, SUCCESS};
 use tribbler::storage;
+
+const BLOCK_SIZE: u64 = 512;
+const MAX_NAME_LENGTH: u32 = 255;
+const MAX_FILE_SIZE: u64 = 1024 * 1024 * 1024 * 1024;
 
 pub struct Front {
     binstore: Box<dyn storage::BinStorage>,
@@ -145,6 +149,8 @@ impl Filesystem for Front {
             Err(_) => reply.error(libc::ENETDOWN),
         }
     }
+
+    fn forget(&mut self, _req: &Request, _ino: u64, _nlookup: u64) {}
 
     fn read(
         &mut self,
@@ -428,6 +434,21 @@ impl Filesystem for Front {
             }
             Err(_) => reply.error(libc::ENETDOWN),
         }
+    }
+
+    fn statfs(&mut self, _req: &Request, _ino: u64, reply: ReplyStatfs) {
+        info!("statfs() implementation is a stub");
+        // TODO: real implementation of this
+        reply.statfs(
+            10_000,
+            10_000,
+            10_000,
+            1,
+            10_000,
+            BLOCK_SIZE as u32,
+            MAX_NAME_LENGTH,
+            BLOCK_SIZE as u32,
+        );
     }
 
     fn setxattr(
