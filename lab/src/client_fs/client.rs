@@ -8,6 +8,7 @@ use fuser::KernelConfig;
 use fuser::TimeOrNow;
 use libc::c_int;
 use tribbler::disfuser;
+use tribbler::disfuser::Init;
 use std::time::SystemTime;
 use tokio::sync::Mutex;
 use tokio_stream::Stream;
@@ -157,9 +158,12 @@ impl ServerFileSystem for StorageClient {
             pid: _req.pid,
         };
 
-        let mut init_request = client.init(freq).await.unwrap().into_inner();
-        if init_request == SUCCESS:
+        let mut init_request = client.init(Init{
+            frequest: freq
+        }).await.unwrap().into_inner();
+        if init_request.errcode == SUCCESS{
             return Ok(SUCCESS);
+        }
         return Ok(libc::EACCES);
     }
 

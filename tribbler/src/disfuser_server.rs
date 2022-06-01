@@ -1,9 +1,9 @@
 use crate::disfuser::disfuser_server::{self, Disfuser};
 use crate::disfuser::{
     self, Access, AccessReply, Create, CreateReply, Getattr, GetattrReply, Getxattr, GetxattrReply,
-    Listxattr, ListxattrReply, LookUp, Open, OpenReply, Read, Release, ReleaseReply, Rename,
-    RenameReply, Reply, Setattr, SetattrReply, Setxattr, SetxattrReply, Unlink, UnlinkReply, Write,
-    WriteReply,
+    Init, InitReply, Listxattr, ListxattrReply, LookUp, Open, OpenReply, Read, Release,
+    ReleaseReply, Rename, RenameReply, Reply, Setattr, SetattrReply, Setxattr, SetxattrReply,
+    Unlink, UnlinkReply, Write, WriteReply,
 };
 use crate::error::SUCCESS;
 use crate::storage::FileRequest;
@@ -128,6 +128,26 @@ impl Disfuser for DisfuserServer {
     type readStream = readStream;
     type getxattrStream = getxattrStream;
     type listxattrStream = listxattrStream;
+
+    async fn init(
+        &self,
+        request: tonic::Request<Init>,
+    ) -> Result<tonic::Response<InitReply>, tonic::Status> {
+        let request_inner = request.into_inner();
+        let mut file_request = FileRequest {
+            uid: request_inner.frequest.clone().uid,
+            gid: request_inner.frequest.clone().gid,
+            pid: request_inner.frequest.clone().pid,
+        };
+
+        let result = self.filesystem.init(&file_request).await;
+
+        // change fileAttr to string
+        match result {
+            Ok(value) => Ok(Response::new(InitReply { errcode: value })),
+            Err(_) => Err(Status::invalid_argument("rename failed")),
+        }
+    }
 
     async fn read(
         &self,

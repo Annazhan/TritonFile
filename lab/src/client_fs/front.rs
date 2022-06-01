@@ -4,7 +4,8 @@
 use fuser::consts::FUSE_HANDLE_KILLPRIV;
 #[cfg(feature = "abi-7-31")]
 use fuser::consts::FUSE_WRITE_KILL_PRIV;
-use fuser::{Filesystem, ReplyCreate, ReplyData, ReplyEmpty, ReplyEntry, ReplyWrite, Request, TimeOrNow, ReplyAttr, ReplyXattr, ReplyOpen};
+use fuser::{Filesystem, ReplyCreate, ReplyData, ReplyEmpty, ReplyEntry, ReplyWrite, Request, TimeOrNow, ReplyAttr, ReplyXattr, ReplyOpen, KernelConfig};
+use libc::c_int;
 use log::info;
 #[cfg(feature = "abi-7-26")]
 use log::info;
@@ -70,6 +71,46 @@ impl Front {
 }
 
 impl Filesystem for Front {
+    fn init(
+        &mut self,
+        _req: &Request,
+        #[allow(unused_variables)] config: &mut KernelConfig,
+    ) -> Result<(), c_int> {
+        info!("front init function");
+        #[cfg(feature = "abi-7-26")]
+        config.add_capabilities(FUSE_HANDLE_KILLPRIV).unwrap();
+        
+        // ReliableStore
+        let gid = _req.gid().to_string().clone();
+        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_res = self.runtime.block_on(bin_pre);
+
+        match bin_res {
+            Ok(bin) => {
+                let freq = &FileRequest {
+                    uid: _req.uid(),
+                    gid: _req.gid(),
+                    pid: _req.pid(),
+                };
+                let bin_init_pre = bin.init(freq);
+
+                let res = self.runtime.block_on(bin_init_pre);
+                match res {
+                    Ok(error_code) => {
+                        if error_code != SUCCESS {
+                            return Err(error_code)
+                        } else {
+                            return Ok(())
+                        }
+                    }
+                    Err(_) => return Err(libc::ENETDOWN),
+                }
+            }
+            Err(_) => return Err(libc::EACCES)
+        }
+        Ok(())
+    }
+
     fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         info!("front  front Look up function");
         // ReliableStore

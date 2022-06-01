@@ -492,6 +492,23 @@ impl BinStore {
 
 #[async_trait]
 impl ServerFileSystem for ReliableStore {
+    async fn init(&self, _req: &FileRequest) -> TritonFileResult<c_int>{
+        loop {
+            let primary = self.primary_store().await?;
+            let backup = self.backup_store().await?;
+
+            match primary.init(_req).await
+            {
+                Err(_) => continue,
+                Ok(_) => (),
+            }
+            match backup.init(_req).await
+            {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
+            }
+        }
+    }
 
     async fn read(
         &self,

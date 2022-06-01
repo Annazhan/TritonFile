@@ -107,6 +107,10 @@ message Access{
     required int32 mask = 3;
 }
 
+message Init{
+    required FRequest frequest = 1;
+}
+
 message Rename{
     required FRequest frequest = 1;
     required uint64 parent = 2;
@@ -229,7 +233,13 @@ message KeyValue {
     required uint32 removed = 1;
   }
 
+  message initReply{
+    required int32 errcode = 1; 
+  }
+
+
 service disfuser {
+    rpc init(Init) returns (initReply) {} 
     rpc read(Read) returns (stream Reply) {}
     rpc write(stream Write) returns (writeReply) {}
     rpc lookup(LookUp) returns (Reply) {} 
