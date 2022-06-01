@@ -273,10 +273,19 @@ impl Disfuser for DisfuserServer {
             .await;
 
         match result {
-            Ok(value) => Ok(Response::new(WriteReply {
-                size: value.0.unwrap(),
-                errcode: value.1,
-            })),
+            Ok((size, errcode)) => {
+                if errcode != SUCCESS{
+                    Ok(Response::new(WriteReply {
+                        size: 0,
+                        errcode: errcode,
+                    }))
+                }else{
+                    Ok(Response::new(WriteReply {
+                        size: size,
+                        errcode: errcode,
+                    })),
+                }
+            }
             Err(_) => Err(Status::invalid_argument("write failed")),
         }
     }
@@ -299,11 +308,19 @@ impl Disfuser for DisfuserServer {
             .await;
 
         match result {
-            Ok(value) => Ok(Response::new(Reply {
-                message: serde_json::to_string(&value.0.unwrap()).unwrap(),
-                // message: ron::ser::to_string(&value.0.unwrap()),
-                errcode: value.1,
-            })),
+            Ok((file_attr, errcode)) => {
+                if errcode != SUCCESS {
+                    Ok(Response::new(Reply {
+                        message: "".to_string(),
+                        errcode: errcode,
+                    }))
+                } else {
+                    Ok(Response::new(Reply {
+                        message: serde_json::to_string(&file_attr.unwrap()).unwrap(),
+                        errcode: errcode,
+                    }))
+                }
+            }
             Err(_) => Err(Status::invalid_argument("lookup failed")),
         }
     }
