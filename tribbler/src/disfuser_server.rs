@@ -1,6 +1,6 @@
 use crate::disfuser::disfuser_server::{self, Disfuser};
 use crate::disfuser::{
-    Access, AccessReply, Create, CreateReply, Getattr, GetattrReply, Getxattr, GetxattrReply,
+    self, Access, AccessReply, Create, CreateReply, Getattr, GetattrReply, Getxattr, GetxattrReply,
     Listxattr, ListxattrReply, LookUp, Open, OpenReply, Read, Release, ReleaseReply, Rename,
     RenameReply, Reply, Setattr, SetattrReply, Setxattr, SetxattrReply, Unlink, UnlinkReply, Write,
     WriteReply,
@@ -10,6 +10,7 @@ use crate::storage::FileRequest;
 use crate::storage::Storage;
 use async_trait::async_trait;
 use fuser::{BackgroundSession, FileAttr, MountOption, Request, TimeOrNow};
+use log::info;
 use std::cmp::min;
 use std::ffi::OsString;
 use std::pin::Pin;
@@ -26,6 +27,7 @@ type listxattrStream = Pin<Box<dyn Stream<Item = Result<ListxattrReply, Status>>
 // type readStream = Pin<Box<dyn Stream<Item = Result<Read, Status>> + Send>>;
 // type lookupStream = Pin<Box<dyn Stream<Item = Result<LookUp, Status>> + Send>>;
 pub const slice_size: usize = 128;
+use crate::disfuser::{Clock, Key, KeyValue, StringList, Value};
 use crate::storage;
 
 pub struct DisfuserServer {
@@ -712,6 +714,158 @@ impl Disfuser for DisfuserServer {
                 errcode: value.1,
             })),
             Err(_) => Err(Status::invalid_argument("setattr failed")),
+        }
+    }
+
+    async fn get(
+        &self,
+        request: tonic::Request<Key>,
+    ) -> Result<tonic::Response<Value>, tonic::Status> {
+        let key = request.into_inner().key;
+        let ret = self.filesystem.get(key.as_str()).await;
+        info!("Get request, key: {:}, ret: {:?}", &key, &ret);
+        match ret {
+            Ok(val) => match val {
+                Some(value) => Ok(Response::new(disfuser::Value { value })),
+                None => Err(Status::not_found("Value not found")),
+            },
+            Err(e) => Err(Status::unknown(e.to_string())),
+        }
+    }
+
+    async fn set(
+        &self,
+        request: tonic::Request<disfuser::KeyValue>,
+    ) -> Result<tonic::Response<disfuser::Bool>, tonic::Status> {
+        let req = request.into_inner();
+        let key = req.key;
+        let value = req.value;
+        let ret = self
+            .filesystem
+            .set(&storage::KeyValue {
+                key: key.clone(),
+                value: value.clone(),
+            })
+            .await;
+        info!(
+            "Set request, key: {:}, val: {:}, ret: {:?}",
+            key, value, &ret
+        );
+        match ret {
+            Ok(value) => Ok(Response::new(disfuser::Bool { value })),
+            Err(e) => Err(Status::unknown(e.to_string())),
+        }
+    }
+
+    async fn keys(
+        &self,
+        request: tonic::Request<disfuser::Pattern>,
+    ) -> Result<tonic::Response<disfuser::StringList>, tonic::Status> {
+        let req = request.into_inner();
+        let prefix = req.prefix;
+        let suffix = req.suffix;
+        let ret = self
+            .filesystem
+            .keys(&storage::Pattern { prefix, suffix })
+            .await;
+        info!("Keys request, ret: {:?}", &ret);
+        match ret {
+            Ok(list) => Ok(Response::new(disfuser::StringList { list: list.0 })),
+            Err(e) => Err(Status::unknown(e.to_string())),
+        }
+    }
+
+    async fn list_get(
+        &self,
+        request: tonic::Request<disfuser::Key>,
+    ) -> Result<tonic::Response<disfuser::StringList>, tonic::Status> {
+        let key = request.into_inner().key;
+        let ret = self.filesystem.list_get(key.as_str()).await;
+        info!("List_get request, key: {:}, ret: {:?}", key, &ret);
+        match ret {
+            Ok(list) => Ok(Response::new(disfuser::StringList { list: list.0 })),
+            Err(e) => Err(Status::unknown(e.to_string())),
+        }
+    }
+
+    async fn list_keys(
+        &self,
+        request: tonic::Request<disfuser::Pattern>,
+    ) -> Result<tonic::Response<disfuser::StringList>, tonic::Status> {
+        let req = request.into_inner();
+        let prefix = req.prefix;
+        let suffix = req.suffix;
+        let ret = self
+            .filesystem
+            .list_keys(&storage::Pattern { prefix, suffix })
+            .await;
+        info!("List_keys request, ret: {:?}", &ret);
+        match ret {
+            Ok(list) => Ok(Response::new(disfuser::StringList { list: list.0 })),
+            Err(e) => Err(Status::unknown(e.to_string())),
+        }
+    }
+
+    async fn list_append(
+        &self,
+        request: tonic::Request<disfuser::KeyValue>,
+    ) -> Result<tonic::Response<disfuser::Bool>, tonic::Status> {
+        let req = request.into_inner();
+        let key = req.key;
+        let value = req.value;
+        let ret = self
+            .filesystem
+            .list_append(&storage::KeyValue {
+                key: key.clone(),
+                value: value.clone(),
+            })
+            .await;
+        let result = self.filesystem.list_get(&key).await;
+        info!(
+            "List_append request, key: {:}, val: {:}, ret: {:?}, result: {:?}",
+            &key, &value, &ret, &result
+        );
+        match ret {
+            Ok(value) => Ok(Response::new(disfuser::Bool { value })),
+            Err(e) => Err(Status::unknown(e.to_string())),
+        }
+    }
+
+    async fn list_remove(
+        &self,
+        request: tonic::Request<disfuser::KeyValue>,
+    ) -> Result<tonic::Response<disfuser::ListRemoveResponse>, tonic::Status> {
+        let req = request.into_inner();
+        let key = req.key;
+        let value = req.value;
+        let ret = self
+            .filesystem
+            .list_remove(&storage::KeyValue {
+                key: key.clone(),
+                value,
+            })
+            .await;
+        let result = self.filesystem.list_get(&key).await;
+        info!(
+            "List_remove request, key: {:}, ret: {:?}, result: {:?}",
+            key, &ret, result
+        );
+        match ret {
+            Ok(removed) => Ok(Response::new(disfuser::ListRemoveResponse { removed })),
+            Err(e) => Err(Status::unknown(e.to_string())),
+        }
+    }
+
+    async fn clock(
+        &self,
+        request: tonic::Request<disfuser::Clock>,
+    ) -> Result<tonic::Response<disfuser::Clock>, tonic::Status> {
+        let at_least = request.into_inner().timestamp;
+        let ret = self.filesystem.clock(at_least).await;
+        // info!("Clock request, at_least: {:}, ret: {:?}", at_least, &ret);
+        match ret {
+            Ok(timestamp) => Ok(Response::new(disfuser::Clock { timestamp })),
+            Err(e) => Err(Status::unknown(e.to_string())),
         }
     }
 }
