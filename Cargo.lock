@@ -471,6 +471,7 @@ dependencies = [
  "clap",
  "env_logger",
  "front",
+ "fuser",
  "log",
  "rand 0.8.5",
  "serde",

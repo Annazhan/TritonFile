@@ -5,6 +5,7 @@ use fuser::consts::FUSE_HANDLE_KILLPRIV;
 #[cfg(feature = "abi-7-31")]
 use fuser::consts::FUSE_WRITE_KILL_PRIV;
 use fuser::{Filesystem, ReplyCreate, ReplyData, ReplyEmpty, ReplyEntry, ReplyWrite, Request, TimeOrNow, ReplyAttr, ReplyXattr, ReplyOpen};
+use log::info;
 #[cfg(feature = "abi-7-26")]
 use log::info;
 use std::ffi::OsStr;
@@ -70,6 +71,7 @@ impl Front {
 
 impl Filesystem for Front {
     fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
+        info!("front  front Look up function");
         // ReliableStore
         let gid = req.gid().to_string().clone();
         let bin_pre = self.binstore.bin(gid.as_str());
@@ -114,6 +116,7 @@ impl Filesystem for Front {
         _lock_owner: Option<u64>,
         reply: ReplyData,
     ) {
+        info!("front  front read function {}", inode);
         // ReliableStore
         let gid = _req.gid().to_string().clone();
         let bin_pre = self.binstore.bin(gid.as_str());
@@ -160,6 +163,7 @@ impl Filesystem for Front {
         _lock_owner: Option<u64>,
         reply: ReplyWrite,
     ) {
+        info!("front  front write {}", inode);
         // ReliableStore
         let freq = &FileRequest {
             uid: _req.uid(),
@@ -211,6 +215,7 @@ impl Filesystem for Front {
         flags: i32,
         reply: ReplyCreate,
     ) {
+        info!("front create function {}", parent);
         let freq = &FileRequest {
             uid: req.uid(),
             gid: req.gid(),
@@ -244,6 +249,7 @@ impl Filesystem for Front {
     }
 
     fn unlink(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: ReplyEmpty) {
+        info!("front  unlink function {}", parent);
         let freq = &FileRequest {
             uid: _req.uid(),
             gid: _req.gid(),
@@ -275,6 +281,7 @@ impl Filesystem for Front {
     }
 
     fn getattr(&mut self, _req: &Request, inode: u64, reply: ReplyAttr) {
+        info!("front  get attr function {}", inode);
         let freq = &FileRequest {
             uid: _req.uid(),
             gid: _req.gid(),
@@ -308,6 +315,7 @@ impl Filesystem for Front {
     }
 
     fn open(&mut self, req: &Request, inode: u64, flags: i32, reply: ReplyOpen) {
+        info!("front  open function {}", inode);
         let freq = &FileRequest {
             uid: req.uid(),
             gid: req.gid(),
@@ -350,6 +358,7 @@ impl Filesystem for Front {
         _flush: bool,
         reply: ReplyEmpty,
     ) {
+        info!("front  release {}", inode);
         let freq = &FileRequest {
             uid: _req.uid(),
             gid: _req.gid(),
@@ -390,6 +399,7 @@ impl Filesystem for Front {
         _position: u32,
         reply: ReplyEmpty,
     ) {
+        info!("front  set x attr {}", inode);
         let freq = &FileRequest {
             uid: request.uid(),
             gid: request.gid(),
@@ -428,6 +438,7 @@ impl Filesystem for Front {
         size: u32,
         reply: ReplyXattr,
     ) {
+        info!("front  get x attr {}", inode);
         let freq = &FileRequest {
             uid: request.uid(),
             gid: request.gid(),
@@ -466,6 +477,7 @@ impl Filesystem for Front {
     }
 
     fn listxattr(&mut self, _req: &Request<'_>, inode: u64, size: u32, reply: ReplyXattr) {
+        info!("front  list x attr {}", inode);
         let freq = &FileRequest {
             uid: _req.uid(),
             gid: _req.gid(),
@@ -504,6 +516,7 @@ impl Filesystem for Front {
     }
 
     fn access(&mut self, req: &Request, inode: u64, mask: i32, reply: ReplyEmpty) {
+        info!("front  access {}", inode);
         let freq = &FileRequest {
             uid: req.uid(),
             gid: req.gid(),
@@ -512,7 +525,8 @@ impl Filesystem for Front {
         let gid = req.gid().to_string().clone();
         let bin_pre = self.binstore.bin(gid.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
-
+        
+        info!("front  access: get bin_res");
         match bin_res {
             Ok(bin) => {
                 let bin_access_pre = bin.access(freq, inode, mask);
@@ -527,10 +541,16 @@ impl Filesystem for Front {
                             reply.ok();
                         }
                     }
-                    Err(_) => reply.error(libc::ENETDOWN),
+                    Err(e) => {
+                        info!("access error 1 {}", e); 
+                        reply.error(libc::ENETDOWN)
+                    },
                 }
             }
-            Err(_) => reply.error(libc::ENETDOWN),
+            Err(e) => {
+                info!("access error 2 {}", e); 
+                reply.error(libc::ENETDOWN)
+            },
         }
     }
 
@@ -544,6 +564,7 @@ impl Filesystem for Front {
         flags: u32,
         reply: ReplyEmpty,
     ) {
+        info!("front rename function {}", parent);
         let freq = &FileRequest {
             uid: req.uid(),
             gid: req.gid(),
@@ -592,6 +613,7 @@ impl Filesystem for Front {
         _flags: Option<u32>,
         reply: ReplyAttr,
     ) {
+        info!("front set attr {}", inode);
         let freq = &FileRequest {
             uid: req.uid(),
             gid: req.gid(),
@@ -626,39 +648,4 @@ impl Filesystem for Front {
             Err(_) => reply.error(libc::ENETDOWN),
         }
     }
-}
-
-pub fn check_access(
-    file_uid: u32,
-    file_gid: u32,
-    file_mode: u16,
-    uid: u32,
-    gid: u32,
-    mut access_mask: i32,
-) -> bool {
-    // F_OK tests for existence of file
-    if access_mask == libc::F_OK {
-        return true;
-    }
-    let file_mode = i32::from(file_mode);
-
-    // root is allowed to read & write anything
-    if uid == 0 {
-        // root only allowed to exec if one of the X bits is set
-        access_mask &= libc::X_OK;
-        access_mask -= access_mask & (file_mode >> 6);
-        access_mask -= access_mask & (file_mode >> 3);
-        access_mask -= access_mask & file_mode;
-        return access_mask == 0;
-    }
-
-    if uid == file_uid {
-        access_mask -= access_mask & (file_mode >> 6);
-    } else if gid == file_gid {
-        access_mask -= access_mask & (file_mode >> 3);
-    } else {
-        access_mask -= access_mask & file_mode;
-    }
-
-    return access_mask == 0;
 }

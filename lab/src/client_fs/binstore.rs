@@ -95,6 +95,7 @@ impl ReliableStore {
         // start from the index and find the first alive one
         let mut idx = 0;
         let mut count = count;
+        info!("addrs len: {}", self.addrs.len());
         let mut limit = self.addrs.len() * 2;
         loop {
             limit -= 1;
@@ -121,12 +122,12 @@ impl ReliableStore {
                                 continue;
                             }
                         }
-                        Err(_) => {
-                            // info!(
-                            //     "Can't clock with store @ {}: {}",
-                            //     self.addrs[idx],
-                            //     err.to_string()
-                            // );
+                        Err(err) => {
+                            info!(
+                                "Can't clock with store @ {}: {}",
+                                self.addrs[idx],
+                                err.to_string()
+                            );
                             idx += 1;
                             continue;
                         }
@@ -627,6 +628,7 @@ impl ServerFileSystem for ReliableStore {
         ino: u64,
     ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
         loop {
+            info!("bin storage getattr");
             let primary = self.primary_store().await?;
             match primary.getattr(_req, ino).await {
                 Err(_) => continue,
