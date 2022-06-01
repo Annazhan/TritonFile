@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use fuser::FileAttr;
 use fuser::TimeOrNow;
 use libc::c_int;
+use tribbler::disfuser;
 use std::time::SystemTime;
 use tokio::sync::Mutex;
 use tokio_stream::Stream;
@@ -787,9 +788,9 @@ impl KeyList for StorageClient {
 #[async_trait]
 impl Storage for StorageClient {
     async fn clock(&self, at_least: u64) -> TritonFileResult<u64> {
-        let mut client = self.client().await;
+        let mut client = self.disfuser_client().await;
         let result = client
-            .clock(rpc::Clock {
+            .clock(disfuser::Clock {
                 timestamp: at_least,
             })
             .await?;
