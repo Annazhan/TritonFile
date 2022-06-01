@@ -158,8 +158,9 @@ impl ServerFileSystem for StorageClient {
         };
 
         let mut init_request = client.init(freq).await.unwrap().into_inner();
-        if init_request == SUCCESS:
+        if init_request == SUCCESS{
             return Ok(SUCCESS);
+        }
         return Ok(libc::EACCES);
     }
 

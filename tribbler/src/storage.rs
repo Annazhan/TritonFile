@@ -523,9 +523,7 @@ impl ServerFileSystem for RemoteFileSystem {
     ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
         let fs = &self.fs;
         if name.len() > simple::MAX_NAME_LENGTH as usize {
-            return Err(Box::new(TritonFileError::UserInterfaceError(
-                libc::ENAMETOOLONG,
-            )));
+            return Ok((None, libc::ENAMETOOLONG));
         }
         let parent_attrs = fs.get_inode(parent).unwrap();
         if !check_access(
