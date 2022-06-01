@@ -274,17 +274,17 @@ impl Disfuser for DisfuserServer {
 
         match result {
             Ok((size, errcode)) => {
-                if errcode != SUCCESS{
-                    Ok(Response::new(WriteReply {
+                if errcode != SUCCESS {
+                    return Ok(Response::new(WriteReply {
                         size: 0,
                         errcode: errcode,
-                    }))
-                }else{
-                    Ok(Response::new(WriteReply {
-                        size: size,
+                    }));
+                } else {
+                    return Ok(Response::new(WriteReply {
+                        size: size.unwrap(),
                         errcode: errcode,
-                    })),
-                }
+                    }));
+                };
             }
             Err(_) => Err(Status::invalid_argument("write failed")),
         }
@@ -349,11 +349,21 @@ impl Disfuser for DisfuserServer {
             )
             .await;
         match result {
-            Ok(value) => Ok(Response::new(CreateReply {
-                file_attr: serde_json::to_string(&value.0.clone().unwrap().0).unwrap(),
-                fh: value.0.clone().unwrap().1,
-                errcode: value.1,
-            })),
+            Ok((res_op, errcode)) => {
+                if errcode != SUCCESS {
+                    return Ok(Response::new(CreateReply {
+                        file_attr: "".to_string(),
+                        fh: 0,
+                        errcode: errcode,
+                    }));
+                } else {
+                    return Ok(Response::new(CreateReply {
+                        file_attr: serde_json::to_string(&res_op.clone().unwrap().0).unwrap(),
+                        fh: res_op.clone().unwrap().1,
+                        errcode: errcode,
+                    }));
+                };
+            }
             Err(_) => Err(Status::invalid_argument("create failed")),
         }
     }
@@ -398,10 +408,19 @@ impl Disfuser for DisfuserServer {
 
         // change fileAttr to string
         match result {
-            Ok(value) => Ok(Response::new(GetattrReply {
-                file_attr: serde_json::to_string(&value.0.clone().unwrap()).unwrap(),
-                errcode: value.1,
-            })),
+            Ok((file_attr, errcode)) => {
+                if errcode != SUCCESS {
+                    return Ok(Response::new(GetattrReply {
+                        file_attr: "".to_string(),
+                        errcode: errcode,
+                    }));
+                } else {
+                    return Ok(Response::new(GetattrReply {
+                        file_attr: serde_json::to_string(&file_attr.unwrap()).unwrap(),
+                        errcode: errcode,
+                    }));
+                }
+            }
             Err(_) => Err(Status::invalid_argument("getattr failed")),
         }
     }
@@ -422,11 +441,21 @@ impl Disfuser for DisfuserServer {
             .await;
 
         match result {
-            Ok(value) => Ok(Response::new(OpenReply {
-                fh: value.0.clone().unwrap().0,
-                openflag: value.0.clone().unwrap().1,
-                errcode: value.1,
-            })),
+            Ok(value) => {
+                if value.1 != SUCCESS {
+                    return Ok(Response::new(OpenReply {
+                        fh: 0,
+                        openflag: 0,
+                        errcode: value.1,
+                    }));
+                } else {
+                    return Ok(Response::new(OpenReply {
+                        fh: value.0.clone().unwrap().0,
+                        openflag: value.0.clone().unwrap().1,
+                        errcode: value.1,
+                    }));
+                }
+            }
             Err(_) => Err(Status::invalid_argument("open failed")),
         }
     }
@@ -746,10 +775,19 @@ impl Disfuser for DisfuserServer {
 
         // change fileAttr to string
         match result {
-            Ok(value) => Ok(Response::new(SetattrReply {
-                file_attr: serde_json::to_string(&value.0.clone().unwrap()).unwrap(),
-                errcode: value.1,
-            })),
+            Ok(value) => {
+                if value.1 != SUCCESS {
+                    return Ok(Response::new(SetattrReply {
+                        file_attr: "".to_string(),
+                        errcode: value.1,
+                    }));
+                } else {
+                    return Ok(Response::new(SetattrReply {
+                        file_attr: serde_json::to_string(&value.0.clone().unwrap()).unwrap(),
+                        errcode: value.1,
+                    }));
+                }
+            }
             Err(_) => Err(Status::invalid_argument("setattr failed")),
         }
     }
