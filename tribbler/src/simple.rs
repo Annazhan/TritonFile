@@ -246,8 +246,8 @@ impl From<InodeAttributes> for fuser::FileAttr {
 // Stores inode metadata data in "$data_dir/inodes" and file contents in "$data_dir/contents"
 // Directory data is stored in the file's contents, as a serialized DirectoryDescriptor
 pub struct SimpleFS {
-    data_dir: String,
-    next_file_handle: AtomicU64,
+    pub data_dir: String,
+    pub next_file_handle: AtomicU64,
     pub direct_io: bool,
     suid_support: bool,
 }

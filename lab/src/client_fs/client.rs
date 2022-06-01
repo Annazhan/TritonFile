@@ -4,6 +4,7 @@ use std::time::UNIX_EPOCH;
 
 use async_trait::async_trait;
 use fuser::FileAttr;
+use fuser::KernelConfig;
 use fuser::TimeOrNow;
 use libc::c_int;
 use tribbler::disfuser;
@@ -147,6 +148,21 @@ fn setxattr_requests_iter(
 
 #[async_trait]
 impl ServerFileSystem for StorageClient {
+    async fn init(&self,
+        _req: &FileRequest) -> TritonFileResult<c_int>{
+        let mut client = self.disfuser_client().await;
+        let freq = FRequest {
+            uid: _req.uid,
+            gid: _req.gid,
+            pid: _req.pid,
+        };
+
+        let mut init_request = client.init(freq).await.unwrap().into_inner();
+        if init_request == SUCCESS:
+            return Ok(SUCCESS);
+        return Ok(libc::EACCES);
+    }
+
     async fn read(
         &self,
         _req: &FileRequest,

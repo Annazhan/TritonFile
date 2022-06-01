@@ -3,11 +3,13 @@
 use async_trait::async_trait;
 use bson::Bson;
 use fuser::consts::FOPEN_DIRECT_IO;
+use fuser::KernelConfig;
 use fuser::Reply;
 use fuser::ReplyData;
 use fuser::Session;
 use fuser::TimeOrNow;
 use fuser::TimeOrNow::Now;
+use fuser::FUSE_ROOT_ID;
 use libc::c_int;
 use log::error;
 use log::info;
@@ -21,6 +23,7 @@ use std::io::SeekFrom;
 use std::io::Write;
 use std::os::unix::prelude::FileExt;
 use std::os::unix::prelude::OsStrExt;
+use std::path::Path;
 use std::time::SystemTime;
 use std::{collections::HashMap, ffi::OsStr, fs, io::ErrorKind, sync::RwLock};
 use tokio::io::BufStream;
@@ -230,6 +233,8 @@ pub trait ServerFileSystem {
         flags: u32,
     ) -> TritonFileResult<c_int>;
 
+    async fn init(&self, _req: &FileRequest) -> TritonFileResult<c_int>;
+
     async fn setattr(
         &self,
         _req: &FileRequest,
@@ -396,6 +401,38 @@ impl KeyList for RemoteFileSystem {
 
 #[async_trait]
 impl ServerFileSystem for RemoteFileSystem {
+    async fn init(&self, _req: &FileRequest) -> TritonFileResult<c_int> {
+        let fs = &self.fs;
+
+        #[cfg(feature = "abi-7-26")]
+        config.add_capabilities(FUSE_HANDLE_KILLPRIV).unwrap();
+
+        fs::create_dir_all(Path::new(&fs.data_dir).join("inodes")).unwrap();
+        fs::create_dir_all(Path::new(&fs.data_dir).join("contents")).unwrap();
+        if fs.get_inode(FUSE_ROOT_ID).is_err() {
+            // Initialize with empty filesystem
+            let root = InodeAttributes {
+                inode: FUSE_ROOT_ID,
+                open_file_handles: 0,
+                size: 0,
+                last_accessed: time_now(),
+                last_modified: time_now(),
+                last_metadata_changed: time_now(),
+                kind: FileKind::Directory,
+                mode: 0o777,
+                hardlinks: 2,
+                uid: 0,
+                gid: 0,
+                xattrs: Default::default(),
+            };
+            fs.write_inode(&root);
+            let mut entries = BTreeMap::new();
+            entries.insert(b".".to_vec(), (FUSE_ROOT_ID, FileKind::Directory));
+            fs.write_directory_content(FUSE_ROOT_ID, entries);
+        }
+        Ok(SUCCESS)
+    }
+
     async fn read(
         &self,
         _req: &FileRequest,
@@ -661,6 +698,7 @@ impl ServerFileSystem for RemoteFileSystem {
         ino: u64,
     ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
         let fs = &self.fs;
+        info!("getattr() call with {:?}", ino);
         match fs.get_inode(ino) {
             Ok(attrs) => Ok((Some(attrs.into()), SUCCESS)),
             Err(error_code) => Ok((None, error_code)),
@@ -765,6 +803,7 @@ impl ServerFileSystem for RemoteFileSystem {
     ) -> TritonFileResult<(Option<(String, u32)>, c_int)> {
         let fs = &self.fs;
 
+        info!("getxattr() called with {:?}, {:?}", inode, size);
         if let Ok(attrs) = fs.get_inode(inode) {
             if let Err(error) = xattr_access_check(key.as_bytes(), libc::R_OK, &attrs, request) {
                 return Ok((None, error));
@@ -832,15 +871,23 @@ impl ServerFileSystem for RemoteFileSystem {
         let fs = &self.fs;
 
         info!("access() called with {:?} {:?}", inode, mask);
+        info!("the file request is {:?}", req);
         match fs.get_inode(inode) {
             Ok(attr) => {
+                info!(
+                    "the file permssion is {}, {}, {}",
+                    attr.uid, attr.gid, attr.mode
+                );
                 if check_access(attr.uid, attr.gid, attr.mode, req.uid, req.gid, mask) {
                     return Ok(SUCCESS);
                 } else {
                     return Ok(libc::EACCES);
                 }
             }
-            Err(error_code) => return Ok(error_code),
+            Err(error_code) => {
+                info!("access error {:?}", error_code);
+                return Ok(error_code);
+            }
         }
     }
 
