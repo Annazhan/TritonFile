@@ -86,7 +86,7 @@ pub async fn main(
 async fn run_srv(t: ProcessType, idx: usize, config: Arc<Config>, tx: Option<Sender<bool>>) {
     match t {
         ProcessType::Back => {
-            let cfg = config.back_config(idx, Box::new(RemoteFileSystem::new(1)), tx, None);
+            let cfg = config.back_config(idx, Box::new(RemoteFileSystem::new(idx)), tx, None);
             info!("starting backend on {}", cfg.addr);
             lab::serve_back(cfg).await;
         }

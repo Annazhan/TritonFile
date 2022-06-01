@@ -275,7 +275,7 @@ pub struct RemoteFileSystem {
 
 impl RemoteFileSystem {
     /// Creates a new instance of [MemStorage]
-    pub fn new(num: u32) -> RemoteFileSystem {
+    pub fn new(num: usize) -> RemoteFileSystem {
         let mut options = vec![MountOption::FSName(format!("fuser{}", num))];
         #[cfg(feature = "abi-7-26")]
         {
@@ -288,6 +288,7 @@ impl RemoteFileSystem {
         }
 
         if !fs::metadata(format!("tmp/{}", num)).is_ok() {
+            info!("try to create metadata file");
             fs::create_dir_all(format!("tmp/{}", num)).unwrap();
         }
 
