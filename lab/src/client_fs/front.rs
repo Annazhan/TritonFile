@@ -210,7 +210,7 @@ impl Filesystem for Front {
         _lock_owner: Option<u64>,
         reply: ReplyWrite,
     ) {
-        info!("front  front write {}", inode);
+        info!("call front write() {}", inode);
         // ReliableStore
         let freq = &FileRequest {
             uid: _req.uid(),

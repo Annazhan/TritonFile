@@ -44,6 +44,7 @@ pub async fn serve_back(config: BackConfig) -> TritonFileResult<()> {
         Ok(lis) => tokio_stream::wrappers::TcpListenerStream::new(lis),
         Err(e) => {
             send_signal(&config.ready, false)?;
+            info!("to start the server, the error is {:?}", e);
             return Err(Box::new(e));
         }
     };

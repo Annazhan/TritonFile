@@ -3,3 +3,5 @@
 /.idea
 lab/src/test2.rs
 cmd/bins.json
+cmd/Cargo.toml
+tmp
