@@ -7,6 +7,7 @@ use fuser::FileAttr;
 use fuser::KernelConfig;
 use fuser::TimeOrNow;
 use libc::c_int;
+use log::info;
 use tribbler::disfuser;
 use tribbler::disfuser::Init;
 use std::time::SystemTime;
@@ -65,6 +66,7 @@ fn write_requests_iter(
     #[allow(unused_variables)] flags: i32,
     _lock_owner: Option<u64>,
 ) -> impl Stream<Item = Write> {
+    info!("write request construction");
     let data_string = serde_json::to_string(data).unwrap();
     let data_len = data_string.len();
 
@@ -222,6 +224,7 @@ impl ServerFileSystem for StorageClient {
         #[allow(unused_variables)] flags: i32,
         _lock_owner: Option<u64>,
     ) -> TritonFileResult<(Option<u32>, c_int)> {
+        info!("client call write() {}", inode);
         let freq = FRequest {
             uid: _req.uid,
             gid: _req.gid,

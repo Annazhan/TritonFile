@@ -543,10 +543,12 @@ impl ServerFileSystem for ReliableStore {
         #[allow(unused_variables)] flags: i32,
         _lock_owner: Option<u64>,
     ) -> TritonFileResult<(Option<u32>, c_int)> {
+        info!("call bin storage write() {}", inode);
         loop {
             let primary = self.primary_store().await?;
             let backup = self.backup_store().await?;
 
+            info!("primary call write() {}", inode);
             match primary
                 .write(
                     _req,
@@ -564,6 +566,7 @@ impl ServerFileSystem for ReliableStore {
                 Ok(_) => (),
             }
 
+            info!("backup call write() {}", inode);
             match backup
                 .write(
                     _req,

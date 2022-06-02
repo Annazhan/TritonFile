@@ -220,6 +220,7 @@ impl Disfuser for DisfuserServer {
         &self,
         request: tonic::Request<tonic::Streaming<Write>>,
     ) -> Result<tonic::Response<WriteReply>, tonic::Status> {
+        info!("rpc server call write()");
         let mut in_stream = request.into_inner();
 
         let mut r_data: Vec<String> = Vec::new();
@@ -235,10 +236,10 @@ impl Disfuser for DisfuserServer {
         let mut flags: i32 = 0;
         let mut _lock_owner: Option<u64> = Some(0);
         // let mut stream = in_stream.take(0);
-        while let item = in_stream.next().await {
+        while let Some(item) = in_stream.next().await {
+            info!("construct the write stream");
             match item {
-                Some(value) => {
-                    let v = value.unwrap();
+                Ok(v) => {
                     r_data.push(v.data);
                     file_request = FileRequest {
                         uid: v.frequest.clone().uid,
@@ -252,12 +253,13 @@ impl Disfuser for DisfuserServer {
                     flags = v.flags;
                     _lock_owner = v.lock_owner;
                 }
-                None => {}
+                Err(_) => {}
             }
         }
         let joined_data = r_data.join("");
         let data = serde_json::from_str::<&[u8]>(&joined_data).unwrap();
 
+        info!("rpc server: get write data length is {}", data.len());
         let result = self
             .filesystem
             .write(

@@ -499,6 +499,7 @@ impl ServerFileSystem for RemoteFileSystem {
         #[allow(unused_variables)] flags: i32,
         _lock_owner: Option<u64>,
     ) -> TritonFileResult<(Option<u32>, c_int)> {
+        info!("metadata call write() {}", inode);
         let fs = &self.fs;
 
         info!("write() called with {:?} size={:?}", inode, data.len());
