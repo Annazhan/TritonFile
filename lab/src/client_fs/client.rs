@@ -2,6 +2,7 @@ use std::cmp::min;
 use std::ffi::OsStr;
 use std::time::UNIX_EPOCH;
 
+use log::info;
 use async_trait::async_trait;
 use fuser::FileAttr;
 use fuser::KernelConfig;
@@ -230,22 +231,44 @@ impl ServerFileSystem for StorageClient {
 
         let mut client = self.disfuser_client().await;
 
-        let in_stream = write_requests_iter(
-            freq,
-            inode,
+        // let in_stream = write_requests_iter(
+            // freq,
+            // inode,
+            // fh,
+            // offset,
+            // data,
+            // _write_flags,
+            // flags,
+            // _lock_owner,
+        // );
+
+
+        info!("client write rpc before");
+        // let result = client.write(in_stream).await?;
+        let res = client.write(Write {
+            frequest: freq,
+            ino:inode,
             fh,
             offset,
-            data,
-            _write_flags,
+            data: serde_json::to_string(data).unwrap(),
+            write_flag: _write_flags,
             flags,
-            _lock_owner,
-        );
+            lock_owner: _lock_owner,
+        }).await;
+        let result = match res{
+            Ok(value) =>value,
+            Err(e) => {
+                info!("{}",e);
+                info!("client wirte fail");
+                return Ok((None, libc::ENETDOWN));
+            }
+        };
 
-        let result = client.write(in_stream).await?;
-
+        info!("client write rpc after");
         let write_reply = result.into_inner();
         let size = write_reply.size;
         let error_code = write_reply.errcode;
+        info!("error_code {}",error_code);
         if error_code != SUCCESS {
             return Ok((None, error_code));
         }

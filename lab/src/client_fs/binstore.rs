@@ -95,7 +95,7 @@ impl ReliableStore {
         // start from the index and find the first alive one
         let mut idx = 0;
         let mut count = count;
-        info!("addrs len: {}", self.addrs.len());
+        info!("{} addrs len: {}", count, self.addrs.len());
         let mut limit = self.addrs.len() * 2;
         loop {
             limit -= 1;
@@ -546,7 +546,6 @@ impl ServerFileSystem for ReliableStore {
         loop {
             let primary = self.primary_store().await?;
             let backup = self.backup_store().await?;
-
             match primary
                 .write(
                     _req,
@@ -560,7 +559,9 @@ impl ServerFileSystem for ReliableStore {
                 )
                 .await
             {
-                Err(_) => continue,
+                Err(_) => {
+                    info!("binstorage prime write fail");
+                    continue},
                 Ok(_) => (),
             }
 
@@ -577,7 +578,9 @@ impl ServerFileSystem for ReliableStore {
                 )
                 .await
             {
-                Err(_) => continue,
+                Err(_) => {
+                    info!("binstorage backup write fail");
+                    continue},
                 Ok(res) => return Ok(res),
             }
         }
@@ -627,15 +630,23 @@ impl ServerFileSystem for ReliableStore {
         _umask: u32,
         flags: i32,
     ) -> TritonFileResult<(Option<(FileAttr, u64)>, c_int)> {
+        info!("At binstorage create");
         loop {
             let primary = self.primary_store().await?;
             let backup = self.backup_store().await?;
+
             match primary.create(req, parent, name, mode, _umask, flags).await {
-                Err(_) => continue,
+                Err(e) => {
+                    info!{"{}", e};
+                    info!("binstorage primary create has error");
+                    continue},
                 Ok(_) => (),
             }
             match backup.create(req, parent, name, mode, _umask, flags).await {
-                Err(_) => continue,
+                Err(e) => {
+                    info!{"{}", e};
+                    info!("binstorage backup create has error");
+                    continue},
                 Ok(res) => return Ok(res),
             }
         }

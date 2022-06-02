@@ -209,83 +209,119 @@ impl Disfuser for DisfuserServer {
                     }
                 }
             }
-            println!("\tclient disconnected");
+            println!("\t read client disconnected");
         });
 
         let output_stream = ReceiverStream::new(rx);
         Ok(Response::new(Box::pin(output_stream) as Self::readStream))
     }
 
+    // async fn write(
+    //     &self,
+    //     request: tonic::Request<tonic::Streaming<Write>>,
+    // ) -> Result<tonic::Response<WriteReply>, tonic::Status> {
+    //     let mut in_stream = request.into_inner();
+
+    //     let mut r_data: Vec<String> = Vec::new();
+    //     let mut file_request: FileRequest = FileRequest {
+    //         uid: 0,
+    //         gid: 0,
+    //         pid: 0,
+    //     };
+    //     let mut inode: u64 = 0;
+    //     let mut file_handler: u64 = 0;
+    //     let mut offset: i64 = 0;
+    //     let mut _write_flags: u32 = 0;
+    //     let mut flags: i32 = 0;
+    //     let mut _lock_owner: Option<u64> = Some(0);
+    //     // let mut stream = in_stream.take(0);
+    //     while let item = in_stream.next().await {
+    //         match item {
+    //             Some(value) => {
+    //                 let v = value.unwrap();
+    //                 r_data.push(v.data);
+    //                 file_request = FileRequest {
+    //                     uid: v.frequest.clone().uid,
+    //                     gid: v.frequest.clone().gid,
+    //                     pid: v.frequest.clone().pid,
+    //                 };
+    //                 inode = v.ino;
+    //                 file_handler = v.fh;
+    //                 offset = v.offset;
+    //                 _write_flags = v.write_flag;
+    //                 flags = v.flags;
+    //                 _lock_owner = v.lock_owner;
+    //             }
+    //             None => {}
+    //         }
+    //     }
+    //     let joined_data = r_data.join("");
+    //     let data = serde_json::from_str::<&[u8]>(&joined_data).unwrap();
+
+    //     let result = self
+    //         .filesystem
+    //         .write(
+    //             &file_request,
+    //             inode,
+    //             file_handler,
+    //             offset,
+    //             data,
+    //             _write_flags,
+    //             flags,
+    //             _lock_owner,
+    //         )
+    //         .await;
+
+    //     match result {
+    //         Ok((size, errcode)) => {
+    //             if errcode != SUCCESS {
+    //                 return Ok(Response::new(WriteReply {
+    //                     size: 0,
+    //                     errcode: errcode,
+    //                 }));
+    //             } else {
+    //                 return Ok(Response::new(WriteReply {
+    //                     size: size.unwrap(),
+    //                     errcode: errcode,
+    //                 }));
+    //             };
+    //         }
+    //         Err(_) => Err(Status::invalid_argument("write failed")),
+    //     }
+    // }
+
     async fn write(
         &self,
-        request: tonic::Request<tonic::Streaming<Write>>,
+        request: tonic::Request<Write>,
     ) -> Result<tonic::Response<WriteReply>, tonic::Status> {
-        let mut in_stream = request.into_inner();
-
-        let mut r_data: Vec<String> = Vec::new();
-        let mut file_request: FileRequest = FileRequest {
-            uid: 0,
-            gid: 0,
-            pid: 0,
+        let mut request_inner = request.into_inner();
+        let mut file_request = FileRequest {
+            uid: request_inner.frequest.clone().uid,
+            gid: request_inner.frequest.clone().gid,
+            pid: request_inner.frequest.clone().pid,
         };
-        let mut inode: u64 = 0;
-        let mut file_handler: u64 = 0;
-        let mut offset: i64 = 0;
-        let mut _write_flags: u32 = 0;
-        let mut flags: i32 = 0;
-        let mut _lock_owner: Option<u64> = Some(0);
-        // let mut stream = in_stream.take(0);
-        while let item = in_stream.next().await {
-            match item {
-                Some(value) => {
-                    let v = value.unwrap();
-                    r_data.push(v.data);
-                    file_request = FileRequest {
-                        uid: v.frequest.clone().uid,
-                        gid: v.frequest.clone().gid,
-                        pid: v.frequest.clone().pid,
-                    };
-                    inode = v.ino;
-                    file_handler = v.fh;
-                    offset = v.offset;
-                    _write_flags = v.write_flag;
-                    flags = v.flags;
-                    _lock_owner = v.lock_owner;
-                }
-                None => {}
-            }
-        }
-        let joined_data = r_data.join("");
-        let data = serde_json::from_str::<&[u8]>(&joined_data).unwrap();
-
+        info!("disfuser_write write before");
+        info!("{}", request_inner.data);
         let result = self
             .filesystem
             .write(
                 &file_request,
-                inode,
-                file_handler,
-                offset,
-                data,
-                _write_flags,
-                flags,
-                _lock_owner,
+                request_inner.ino,
+                request_inner.fh,
+                request_inner.offset,
+                // &(serde_json::from_str::<[u8]>(&).unwrap()),
+                request_inner.data.as_bytes(),
+                request_inner.write_flag,
+                request_inner.flags,
+                request_inner.lock_owner,
             )
             .await;
-
+        info!("disfuser_write write after");
         match result {
-            Ok((size, errcode)) => {
-                if errcode != SUCCESS {
-                    return Ok(Response::new(WriteReply {
-                        size: 0,
-                        errcode: errcode,
-                    }));
-                } else {
-                    return Ok(Response::new(WriteReply {
-                        size: size.unwrap(),
-                        errcode: errcode,
-                    }));
-                };
-            }
+            Ok(value) => Ok(Response::new(WriteReply {
+                size: value.0.unwrap(),
+                errcode: value.1,
+            })),
             Err(_) => Err(Status::invalid_argument("write failed")),
         }
     }
@@ -523,7 +559,7 @@ impl Disfuser for DisfuserServer {
             }
         }
         let joined_data = value_data.join("");
-        let data = serde_json::from_str::<&[u8]>(&joined_data).unwrap();
+        let data = joined_data.as_bytes();
 
         let mut osstring = OsString::new();
         osstring.push(name);
@@ -599,7 +635,7 @@ impl Disfuser for DisfuserServer {
                     }
                 }
             }
-            println!("\tclient disconnected");
+            println!("\tgetxattr client disconnected");
         });
 
         let output_stream = ReceiverStream::new(rx);
@@ -658,7 +694,7 @@ impl Disfuser for DisfuserServer {
                     }
                 }
             }
-            println!("\tclient disconnected");
+            println!("\t listxattr client disconnected");
         });
 
         let output_stream = ReceiverStream::new(rx);

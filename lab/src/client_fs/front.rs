@@ -274,6 +274,7 @@ impl Filesystem for Front {
 
         match bin_res {
             Ok(bin) => {
+                info!{"front create"};
                 let bin_create_pre = bin.create(freq, parent, name, mode, _umask, flags);
 
                 let res = self.runtime.block_on(bin_create_pre);
@@ -291,7 +292,10 @@ impl Filesystem for Front {
                     Err(_) => reply.error(libc::ENETDOWN),
                 }
             }
-            Err(_) => reply.error(libc::ENETDOWN),
+            Err(e) => {
+                info!{"front create error?"};
+                info!{"{}", e};
+                reply.error(libc::ENETDOWN)},
         }
     }
 

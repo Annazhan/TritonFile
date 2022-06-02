@@ -440,7 +440,7 @@ pub mod disfuser_client {
         }
         pub async fn write(
             &mut self,
-            request: impl tonic::IntoStreamingRequest<Message = super::Write>,
+            request: impl tonic::IntoRequest<super::Write>,
         ) -> Result<tonic::Response<super::WriteReply>, tonic::Status> {
             self.inner.ready().await.map_err(|e| {
                 tonic::Status::new(
@@ -450,9 +450,7 @@ pub mod disfuser_client {
             })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/write");
-            self.inner
-                .client_streaming(request.into_streaming_request(), path, codec)
-                .await
+            self.inner.unary(request.into_request(), path, codec).await
         }
         pub async fn lookup(
             &mut self,
@@ -765,7 +763,7 @@ pub mod disfuser_server {
         ) -> Result<tonic::Response<Self::readStream>, tonic::Status>;
         async fn write(
             &self,
-            request: tonic::Request<tonic::Streaming<super::Write>>,
+            request: tonic::Request<super::Write>,
         ) -> Result<tonic::Response<super::WriteReply>, tonic::Status>;
         async fn lookup(
             &self,
@@ -956,13 +954,10 @@ pub mod disfuser_server {
                 "/disfuser.disfuser/write" => {
                     #[allow(non_camel_case_types)]
                     struct writeSvc<T: Disfuser>(pub Arc<T>);
-                    impl<T: Disfuser> tonic::server::ClientStreamingService<super::Write> for writeSvc<T> {
+                    impl<T: Disfuser> tonic::server::UnaryService<super::Write> for writeSvc<T> {
                         type Response = super::WriteReply;
                         type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<tonic::Streaming<super::Write>>,
-                        ) -> Self::Future {
+                        fn call(&mut self, request: tonic::Request<super::Write>) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move { (*inner).write(request).await };
                             Box::pin(fut)
@@ -979,7 +974,7 @@ pub mod disfuser_server {
                             accept_compression_encodings,
                             send_compression_encodings,
                         );
-                        let res = grpc.client_streaming(method, req).await;
+                        let res = grpc.unary(method, req).await;
                         Ok(res)
                     };
                     Box::pin(fut)

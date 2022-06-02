@@ -241,7 +241,7 @@ message KeyValue {
 service disfuser {
     rpc init(Init) returns (initReply) {} 
     rpc read(Read) returns (stream Reply) {}
-    rpc write(stream Write) returns (writeReply) {}
+    rpc write(Write) returns (writeReply) {}
     rpc lookup(LookUp) returns (Reply) {} 
     rpc create(Create) returns (createReply) {} 
     rpc unlink(Unlink) returns (unlinkReply) {} 
