@@ -8,7 +8,6 @@ use fuser::FileAttr;
 use fuser::KernelConfig;
 use fuser::TimeOrNow;
 use libc::c_int;
-use log::info;
 use tribbler::disfuser;
 use tribbler::disfuser::Init;
 use std::time::SystemTime;

@@ -3,9 +3,11 @@
 use async_trait::async_trait;
 use bson::Bson;
 use fuser::consts::FOPEN_DIRECT_IO;
+use fuser::FileType;
 use fuser::KernelConfig;
 use fuser::Reply;
 use fuser::ReplyData;
+use fuser::ReplyDirectory;
 use fuser::Session;
 use fuser::TimeOrNow;
 use fuser::TimeOrNow::Now;
@@ -29,6 +31,7 @@ use std::{collections::HashMap, ffi::OsStr, fs, io::ErrorKind, sync::RwLock};
 use tokio::io::BufStream;
 use tokio_stream::{Stream, StreamExt};
 
+use crate::disfuser::Data;
 use crate::error;
 use crate::error::TritonFileError;
 use crate::error::TritonFileResult;
@@ -93,6 +96,9 @@ impl Pattern {
 #[derive(Debug, Clone)]
 /// A wrapper type around a [Vec<String>]
 pub struct List(pub Vec<String>);
+
+#[derive(Debug, Clone)]
+pub struct DataList(pub Vec<u8>);
 
 #[async_trait]
 /// Key-value pair interfaces
@@ -252,6 +258,29 @@ pub trait ServerFileSystem {
         _bkuptime: Option<SystemTime>,
         flags: Option<u32>,
     ) -> TritonFileResult<(Option<FileAttr>, c_int)>;
+
+    async fn readdir(
+        &self,
+        _req: &FileRequest,
+        inode: u64,
+        _fh: u64,
+        offset: i64,
+    ) -> TritonFileResult<(Option<(u64, i64, FileType, DataList)>, c_int)>;
+
+    async fn releasedir(
+        &mut self,
+        _req: &FileRequest,
+        inode: u64,
+        _fh: u64,
+        _flags: i32,
+    ) -> TritonFileResult<c_int>;
+
+    async fn opendir(
+        &self,
+        req: &Request,
+        inode: u64,
+        flags: i32,
+    ) -> TritonFileResult<(Option<(u64, u32)>, c_int)>;
 }
 
 #[async_trait]
@@ -527,9 +556,10 @@ impl ServerFileSystem for RemoteFileSystem {
             // However, xfstests fail in that case
             clear_suid_sgid(&mut attrs);
             fs.write_inode(&attrs);
-
+            info!("write sucess in back end");
             return Ok((Some(data.len() as u32), error::SUCCESS));
         } else {
+            info!("write fails in back end");
             return Ok((None, libc::EBADF));
         }
     }
@@ -820,9 +850,10 @@ impl ServerFileSystem for RemoteFileSystem {
     ) -> TritonFileResult<(Option<(String, u32)>, c_int)> {
         let fs = &self.fs;
 
-        info!("getxattr() called with {:?}, {:?}", inode, size);
+        info!("getxattr() called with key{:?}", key);
         if let Ok(attrs) = fs.get_inode(inode) {
             if let Err(error) = xattr_access_check(key.as_bytes(), libc::R_OK, &attrs, request) {
+                info!("filesystem access_check fail");
                 return Ok((None, error));
             }
 
@@ -1266,6 +1297,60 @@ impl ServerFileSystem for RemoteFileSystem {
 
         let attrs = fs.get_inode(inode).unwrap();
         return Ok((Some(attrs.into()), SUCCESS));
+    }
+
+    async fn readdir(
+        &self,
+        _req: &FileRequest,
+        inode: u64,
+        _fh: u64,
+        offset: i64,
+    ) -> TritonFileResult<(Option<(u64, i64, FileType, DataList)>, c_int)> {
+        let fs = &self.fs;
+        assert!(offset >= 0);
+        let entries = match fs.get_directory_content(inode) {
+            Ok(entries) => entries,
+            Err(error_code) => {
+                return Ok((None, error_code));
+            }
+        };
+
+        for (index, entry) in entries.iter().skip(offset as usize).enumerate() {
+            let (name, (inode, file_type)) = entry;
+
+            let buffer_full: bool = reply.add(
+                *inode,
+                offset + index as i64 + 1,
+                (*file_type).into(),
+                OsStr::from_bytes(name),
+            );
+
+            if buffer_full {
+                break;
+            }
+        }
+
+        reply.ok();
+        Ok(())
+    }
+
+    async fn releasedir(
+        &mut self,
+        _req: &FileRequest,
+        inode: u64,
+        _fh: u64,
+        _flags: i32,
+    ) -> TritonFileResult<c_int> {
+        Ok(())
+    }
+
+    async fn opendir(
+        &self,
+        req: &Request,
+        inode: u64,
+        flags: i32,
+    ) -> TritonFileResult<(Option<(u64, u32)>, c_int)> {
+        Ok(())
     }
 }
 

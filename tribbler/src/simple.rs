@@ -14,7 +14,7 @@ use fuser::{
 };
 #[cfg(feature = "abi-7-26")]
 use log::info;
-use log::{debug, warn};
+use log::{debug, info, warn};
 use log::{error, LevelFilter};
 use serde::{Deserialize, Serialize};
 use std::cmp::min;
@@ -76,6 +76,7 @@ enum XattrNamespace {
 }
 
 fn parse_xattr_namespace(key: &[u8]) -> Result<XattrNamespace, c_int> {
+    info!("parse_xattr_namespace key len {}", key.len());
     let user = b"user.";
     if key.len() < user.len() {
         return Err(libc::ENOTSUP);
@@ -174,6 +175,7 @@ pub fn xattr_access_check(
         }
     }
 
+    info!("access_check passed");
     Ok(())
 }
 

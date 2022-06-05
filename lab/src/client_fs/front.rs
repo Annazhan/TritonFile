@@ -4,9 +4,9 @@
 use fuser::consts::FUSE_HANDLE_KILLPRIV;
 #[cfg(feature = "abi-7-31")]
 use fuser::consts::FUSE_WRITE_KILL_PRIV;
-use fuser::{Filesystem, ReplyCreate, ReplyData, ReplyEmpty, ReplyEntry, ReplyWrite, Request, TimeOrNow, ReplyAttr, ReplyXattr, ReplyOpen, KernelConfig, ReplyStatfs};
+use fuser::{Filesystem, ReplyCreate, ReplyData, ReplyEmpty, ReplyEntry, ReplyWrite, Request, TimeOrNow, ReplyAttr, ReplyXattr, ReplyOpen, KernelConfig, ReplyStatfs, ReplyDirectory};
 use libc::c_int;
-use log::info;
+use log::{info, warn};
 #[cfg(feature = "abi-7-26")]
 use log::info;
 use std::ffi::OsStr;
@@ -714,4 +714,35 @@ impl Filesystem for Front {
             Err(_) => reply.error(libc::ENETDOWN),
         }
     }
+
+    fn opendir(&mut self, _req: &Request<'_>, _ino: u64, _flags: i32, reply: ReplyOpen) {
+        reply.opened(0, 0);
+    }
+
+    fn readdir(
+        &mut self,
+        _req: &Request<'_>,
+        ino: u64,
+        fh: u64,
+        offset: i64,
+        reply: ReplyDirectory,
+    ) {
+        info!(
+            "[Not Implemented] readdir(ino: {:#x?}, fh: {}, offset: {})",
+            ino, fh, offset
+        );
+        reply.error(libc::ENOSYS);
+    }
+
+    fn releasedir(
+        &mut self,
+        _req: &Request<'_>,
+        _ino: u64,
+        _fh: u64,
+        _flags: i32,
+        reply: ReplyEmpty,
+    ) {
+        reply.ok();
+    }
+
 }

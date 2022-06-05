@@ -601,6 +601,7 @@ impl Disfuser for DisfuserServer {
             .filesystem
             .getxattr(&request, r_inner.ino, &osstring.as_os_str(), r_inner.size)
             .await;
+        info!("rpc server getxattr, filesystem result: {:?}", result);
         let mut reply = Vec::new();
         match result {
             Ok(value) => {
@@ -635,7 +636,7 @@ impl Disfuser for DisfuserServer {
                     }
                 }
             }
-            println!("\tgetxattr client disconnected");
+            info!("\tgetxattr client disconnected");
         });
 
         let output_stream = ReceiverStream::new(rx);
@@ -694,7 +695,7 @@ impl Disfuser for DisfuserServer {
                     }
                 }
             }
-            println!("\t listxattr client disconnected");
+            info!("\t listxattr client disconnected");
         });
 
         let output_stream = ReceiverStream::new(rx);
