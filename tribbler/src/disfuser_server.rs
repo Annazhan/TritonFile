@@ -319,10 +319,16 @@ impl Disfuser for DisfuserServer {
             .await;
         info!("disfuser_write write after");
         match result {
-            Ok(value) => Ok(Response::new(WriteReply {
-                size: value.0.unwrap(),
-                errcode: value.1,
-            })),
+            Ok((value, errcode)) => {
+                if errcode != SUCCESS {
+                    Ok(Response::new(WriteReply { size: 0, errcode }))
+                } else {
+                    Ok(Response::new(WriteReply {
+                        size: value.unwrap(),
+                        errcode,
+                    }))
+                }
+            }
             Err(_) => Err(Status::invalid_argument("write failed")),
         }
     }
