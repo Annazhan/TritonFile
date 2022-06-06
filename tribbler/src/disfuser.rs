@@ -348,6 +348,88 @@ pub struct InitReply {
     #[prost(int32, required, tag = "1")]
     pub errcode: i32,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReadDir {
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
+    pub ino: u64,
+    #[prost(uint64, required, tag = "3")]
+    pub fh: u64,
+    #[prost(int64, required, tag = "4")]
+    pub offset: i64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReadDirReply {
+    #[prost(uint64, required, tag = "1")]
+    pub ino: u64,
+    #[prost(int64, required, tag = "2")]
+    pub offset: i64,
+    #[prost(string, required, tag = "3")]
+    pub file_type: ::prost::alloc::string::String,
+    #[prost(string, required, tag = "4")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(int32, required, tag = "5")]
+    pub errcode: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OpenDir {
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
+    pub ino: u64,
+    #[prost(int32, required, tag = "3")]
+    pub flags: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OpenDirReply {
+    #[prost(int32, required, tag = "1")]
+    pub fh: i32,
+    #[prost(int32, required, tag = "2")]
+    pub errcode: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MkDir {
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
+    pub parent: u64,
+    #[prost(string, required, tag = "3")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(uint32, required, tag = "4")]
+    pub mode: u32,
+    #[prost(uint32, required, tag = "5")]
+    pub umask: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MkDirReply {
+    #[prost(uint64, required, tag = "1")]
+    pub secs: u64,
+    #[prost(uint32, required, tag = "2")]
+    pub nanos: u32,
+    #[prost(string, required, tag = "3")]
+    pub fileattr: ::prost::alloc::string::String,
+    #[prost(uint64, required, tag = "4")]
+    pub generation: u64,
+    #[prost(int32, required, tag = "5")]
+    pub errcode: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReleaseDir {
+    #[prost(message, required, tag = "1")]
+    pub frequest: FRequest,
+    #[prost(uint64, required, tag = "2")]
+    pub inode: u64,
+    #[prost(uint64, required, tag = "3")]
+    pub fh: u64,
+    #[prost(int32, required, tag = "4")]
+    pub flags: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ReleaseDirReply {
+    #[prost(int32, required, tag = "1")]
+    pub errcode: i32,
+}
 #[doc = r" Generated client implementations."]
 pub mod disfuser_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
@@ -628,6 +710,62 @@ pub mod disfuser_client {
             let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/setattr");
             self.inner.unary(request.into_request(), path, codec).await
         }
+        pub async fn readdir(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ReadDir>,
+        ) -> Result<tonic::Response<super::ReadDirReply>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/readdir");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn opendir(
+            &mut self,
+            request: impl tonic::IntoRequest<super::OpenDir>,
+        ) -> Result<tonic::Response<super::OpenDirReply>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/opendir");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn mkdir(
+            &mut self,
+            request: impl tonic::IntoRequest<super::MkDir>,
+        ) -> Result<tonic::Response<super::MkDirReply>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/mkdir");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn releasedir(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ReleaseDir>,
+        ) -> Result<tonic::Response<super::ReleaseDirReply>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/releasedir");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
         pub async fn get(
             &mut self,
             request: impl tonic::IntoRequest<super::Key>,
@@ -821,6 +959,22 @@ pub mod disfuser_server {
             &self,
             request: tonic::Request<super::Setattr>,
         ) -> Result<tonic::Response<super::SetattrReply>, tonic::Status>;
+        async fn readdir(
+            &self,
+            request: tonic::Request<super::ReadDir>,
+        ) -> Result<tonic::Response<super::ReadDirReply>, tonic::Status>;
+        async fn opendir(
+            &self,
+            request: tonic::Request<super::OpenDir>,
+        ) -> Result<tonic::Response<super::OpenDirReply>, tonic::Status>;
+        async fn mkdir(
+            &self,
+            request: tonic::Request<super::MkDir>,
+        ) -> Result<tonic::Response<super::MkDirReply>, tonic::Status>;
+        async fn releasedir(
+            &self,
+            request: tonic::Request<super::ReleaseDir>,
+        ) -> Result<tonic::Response<super::ReleaseDirReply>, tonic::Status>;
         async fn get(
             &self,
             request: tonic::Request<super::Key>,
@@ -1327,6 +1481,127 @@ pub mod disfuser_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = setattrSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/disfuser.disfuser/readdir" => {
+                    #[allow(non_camel_case_types)]
+                    struct readdirSvc<T: Disfuser>(pub Arc<T>);
+                    impl<T: Disfuser> tonic::server::UnaryService<super::ReadDir> for readdirSvc<T> {
+                        type Response = super::ReadDirReply;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ReadDir>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).readdir(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = readdirSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/disfuser.disfuser/opendir" => {
+                    #[allow(non_camel_case_types)]
+                    struct opendirSvc<T: Disfuser>(pub Arc<T>);
+                    impl<T: Disfuser> tonic::server::UnaryService<super::OpenDir> for opendirSvc<T> {
+                        type Response = super::OpenDirReply;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::OpenDir>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).opendir(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = opendirSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/disfuser.disfuser/mkdir" => {
+                    #[allow(non_camel_case_types)]
+                    struct mkdirSvc<T: Disfuser>(pub Arc<T>);
+                    impl<T: Disfuser> tonic::server::UnaryService<super::MkDir> for mkdirSvc<T> {
+                        type Response = super::MkDirReply;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(&mut self, request: tonic::Request<super::MkDir>) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).mkdir(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = mkdirSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/disfuser.disfuser/releasedir" => {
+                    #[allow(non_camel_case_types)]
+                    struct releasedirSvc<T: Disfuser>(pub Arc<T>);
+                    impl<T: Disfuser> tonic::server::UnaryService<super::ReleaseDir> for releasedirSvc<T> {
+                        type Response = super::ReleaseDirReply;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ReleaseDir>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).releasedir(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = releasedirSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
                             accept_compression_encodings,

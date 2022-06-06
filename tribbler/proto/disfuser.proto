@@ -237,6 +237,61 @@ message KeyValue {
     required int32 errcode = 1; 
   }
 
+  message ReadDir{
+    required FRequest frequest = 1;
+    required uint64 ino = 2;
+    required uint64 fh = 3; 
+    required int64 offset = 4; 
+  }
+
+  message ReadDirReply {
+    required uint64 ino = 1;
+    required int64 offset = 2; 
+    required string fileType = 3; 
+    required string name = 4; 
+    required int32 errcode = 5; 
+
+  }
+
+  message OpenDir{
+    required FRequest frequest = 1;
+    required uint64 ino = 2;
+    required int32 flags = 3; 
+  }
+
+  message OpenDirReply{
+    required int32 fh = 1; 
+    required int32 errcode = 2; 
+
+  }
+
+  message MkDir {
+    required FRequest frequest = 1;
+    required uint64 parent = 2;
+    required string name = 3; 
+    required uint32 mode = 4;
+    required uint32 umask = 5;
+  }
+
+  message MkDirReply {
+    required uint64 secs = 1; 
+    required uint32 nanos = 2; 
+    required string fileattr = 3; 
+    required uint64 generation = 4; 
+    required int32 errcode = 5; 
+
+  }
+
+  message ReleaseDir {
+    required FRequest frequest = 1;
+    required uint64 inode = 2;
+    required uint64 fh = 3; 
+    required int32 flags = 4;
+  }
+
+  message ReleaseDirReply{
+    required int32 errcode = 1;
+  }
 
 service disfuser {
     rpc init(Init) returns (initReply) {} 
@@ -254,6 +309,10 @@ service disfuser {
     rpc getxattr(Getxattr) returns (stream getxattrReply) {} 
     rpc listxattr(Listxattr) returns (stream listxattrReply) {} 
     rpc setattr(Setattr) returns (setattrReply) {} 
+    rpc readdir(ReadDir) returns (ReadDirReply) {}
+    rpc opendir(OpenDir) returns (OpenDirReply) {}
+    rpc mkdir(MkDir) returns (MkDirReply) {}
+    rpc releasedir(ReleaseDir) returns (ReleaseDirReply) {}
 
     rpc get(Key) returns (Value);
     rpc set(KeyValue) returns (Bool);
