@@ -277,10 +277,19 @@ pub trait ServerFileSystem {
 
     async fn opendir(
         &self,
-        req: &Request,
+        req: &FileRequest,
         inode: u64,
         flags: i32,
     ) -> TritonFileResult<(Option<(u64, u32)>, c_int)>;
+
+    async fn mkdir(
+        &self,
+        req: &FileRequest,
+        parent: u64,
+        name: &OsStr,
+        mut mode: u32,
+        _umask: u32,
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)>;
 }
 
 #[async_trait]
@@ -1346,10 +1355,21 @@ impl ServerFileSystem for RemoteFileSystem {
 
     async fn opendir(
         &self,
-        req: &Request,
+        req: &FileRequest,
         inode: u64,
         flags: i32,
     ) -> TritonFileResult<(Option<(u64, u32)>, c_int)> {
+        Ok(())
+    }
+
+    async fn mkdir(
+        &self,
+        req: &FileRequest,
+        parent: u64,
+        name: &OsStr,
+        mut mode: u32,
+        _umask: u32,
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
         Ok(())
     }
 }

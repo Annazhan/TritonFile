@@ -1,7 +1,8 @@
 use crate::disfuser::disfuser_server::{self, Disfuser};
 use crate::disfuser::{
     self, Access, AccessReply, Create, CreateReply, Getattr, GetattrReply, Getxattr, GetxattrReply,
-    Init, InitReply, Listxattr, ListxattrReply, LookUp, Open, OpenReply, Read, Release,
+    Init, InitReply, Listxattr, ListxattrReply, LookUp, MkDir, MkDirReply, Open, OpenDir,
+    OpenDirReply, OpenReply, Read, ReadDir, ReadDirReply, Release, ReleaseDir, ReleaseDirReply,
     ReleaseReply, Rename, RenameReply, Reply, Setattr, SetattrReply, Setxattr, SetxattrReply,
     Unlink, UnlinkReply, Write, WriteReply,
 };
@@ -829,6 +830,163 @@ impl Disfuser for DisfuserServer {
         }
     }
 
+    async fn readdir(
+        &self,
+        request: tonic::Request<ReadDir>,
+    ) -> Result<tonic::Response<ReadDirReply>, tonic::Status> {
+        let request_inner = request.into_inner();
+        let mut file_request = FileRequest {
+            uid: request_inner.frequest.clone().uid,
+            gid: request_inner.frequest.clone().gid,
+            pid: request_inner.frequest.clone().pid,
+        };
+        let result = self
+            .filesystem
+            .readdir(
+                &file_request,
+                request_inner.ino,
+                request_inner.fh,
+                request_inner.offset,
+            )
+            .await;
+
+        // change fileAttr to string
+        match result {
+            Ok((value, errcode)) => {
+                if errcode != SUCCESS {
+                    Ok(Response::new(ReadDirReply {
+                        ino: 0,
+                        offset: 0,
+                        file_type: "".to_string(),
+                        name: "".to_string(),
+                        errcode,
+                    }))
+                } else {
+                    let v = value.unwrap();
+                    Ok(Response::new(ReadDirReply {
+                        ino: v.0,
+                        offset: v.1,
+                        file_type: serde_json::to_string(&v.2).unwrap(),
+                        name: std::str::from_utf8(&v.3 .0).unwrap().to_string(),
+                        errcode,
+                    }))
+                }
+            }
+            Err(_) => Err(Status::invalid_argument("getattr failed")),
+        }
+    }
+
+    async fn opendir(
+        &self,
+        request: tonic::Request<OpenDir>,
+    ) -> Result<tonic::Response<OpenDirReply>, tonic::Status> {
+        let request_inner = request.into_inner();
+        let mut file_request = FileRequest {
+            uid: request_inner.frequest.clone().uid,
+            gid: request_inner.frequest.clone().gid,
+            pid: request_inner.frequest.clone().pid,
+        };
+        let result = self
+            .filesystem
+            .opendir(&file_request, request_inner.ino, request_inner.flags)
+            .await;
+
+        // change fileAttr to string
+        match result {
+            Ok((value, errcode)) => {
+                if errcode != SUCCESS {
+                    Ok(Response::new(OpenDirReply {
+                        fh: 0,
+                        flags: 0,
+                        errcode,
+                    }))
+                } else {
+                    let v = value.unwrap();
+                    Ok(Response::new(OpenDirReply {
+                        fh: v.0,
+                        flags: v.1,
+                        errcode,
+                    }))
+                }
+            }
+            Err(_) => Err(Status::invalid_argument("getattr failed")),
+        }
+    }
+
+    async fn mkdir(
+        &self,
+        request: tonic::Request<MkDir>,
+    ) -> Result<tonic::Response<MkDirReply>, tonic::Status> {
+        let request_inner = request.into_inner();
+        let mut file_request = FileRequest {
+            uid: request_inner.frequest.clone().uid,
+            gid: request_inner.frequest.clone().gid,
+            pid: request_inner.frequest.clone().pid,
+        };
+
+        let mut name = OsString::new();
+        name.push(request_inner.name);
+
+        let result = self
+            .filesystem
+            .mkdir(
+                &file_request,
+                request_inner.parent,
+                &name.as_os_str(),
+                request_inner.mode,
+                request_inner.umask,
+            )
+            .await;
+
+        // change fileAttr to string
+        match result {
+            Ok((value, errcode)) => {
+                if errcode != SUCCESS {
+                    Ok(Response::new(MkDirReply {
+                        fileattr: "".to_string(),
+                        errcode,
+                    }))
+                } else {
+                    let v = value.unwrap();
+                    Ok(Response::new(MkDirReply {
+                        fileattr: serde_json::to_string(&v).unwrap(),
+                        errcode,
+                    }))
+                }
+            }
+            Err(_) => Err(Status::invalid_argument("getattr failed")),
+        }
+    }
+
+    async fn releasedir(
+        &self,
+        request: tonic::Request<ReleaseDir>,
+    ) -> Result<tonic::Response<ReleaseDirReply>, tonic::Status> {
+        let request_inner = request.into_inner();
+        let mut file_request = FileRequest {
+            uid: request_inner.frequest.clone().uid,
+            gid: request_inner.frequest.clone().gid,
+            pid: request_inner.frequest.clone().pid,
+        };
+        let result = self
+            .filesystem
+            .releasedir(
+                &file_request,
+                request_inner.inode,
+                request_inner.fh,
+                request_inner.flags,
+            )
+            .await;
+
+        // change fileAttr to string
+        match result {
+            Ok(value) => Ok(Response::new(ReleaseDirReply { errcode: value })),
+            Err(_) => Err(Status::invalid_argument("getattr failed")),
+        }
+    }
+
+    ////////////////////////////////////////////////////////////////////
+    /// below is the storage part
     async fn get(
         &self,
         request: tonic::Request<Key>,

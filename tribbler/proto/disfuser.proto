@@ -260,8 +260,9 @@ message KeyValue {
   }
 
   message OpenDirReply{
-    required int32 fh = 1; 
-    required int32 errcode = 2; 
+    required uint64 fh = 1; 
+    required uint32 flags = 2;
+    required int32 errcode = 3; 
 
   }
 
@@ -274,11 +275,8 @@ message KeyValue {
   }
 
   message MkDirReply {
-    required uint64 secs = 1; 
-    required uint32 nanos = 2; 
-    required string fileattr = 3; 
-    required uint64 generation = 4; 
-    required int32 errcode = 5; 
+    required string fileattr = 1; 
+    required int32 errcode = 2; 
 
   }
 

@@ -383,9 +383,11 @@ pub struct OpenDir {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct OpenDirReply {
-    #[prost(int32, required, tag = "1")]
-    pub fh: i32,
-    #[prost(int32, required, tag = "2")]
+    #[prost(uint64, required, tag = "1")]
+    pub fh: u64,
+    #[prost(uint32, required, tag = "2")]
+    pub flags: u32,
+    #[prost(int32, required, tag = "3")]
     pub errcode: i32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -403,15 +405,9 @@ pub struct MkDir {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MkDirReply {
-    #[prost(uint64, required, tag = "1")]
-    pub secs: u64,
-    #[prost(uint32, required, tag = "2")]
-    pub nanos: u32,
-    #[prost(string, required, tag = "3")]
+    #[prost(string, required, tag = "1")]
     pub fileattr: ::prost::alloc::string::String,
-    #[prost(uint64, required, tag = "4")]
-    pub generation: u64,
-    #[prost(int32, required, tag = "5")]
+    #[prost(int32, required, tag = "2")]
     pub errcode: i32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
