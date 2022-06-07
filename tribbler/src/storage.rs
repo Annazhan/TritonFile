@@ -152,6 +152,18 @@ pub trait KeyList {
 
 #[async_trait]
 pub trait ServerFileSystem {
+    async fn get_all_nodes(
+        &self,
+        for_addr: usize,
+        len: usize,
+    ) -> TritonFileResult<Option<(InodeList, ContentList)>>;
+
+    async fn write_all_nodes(
+        &self,
+        inode_list: InodeList,
+        content_list: ContentList,
+    ) -> TritonFileResult<()>;
+
     async fn read(
         &self,
         _req: &FileRequest,
@@ -382,55 +394,6 @@ impl RemoteFileSystem {
             label: num,
         }
     }
-
-    pub async fn get_all_nodes(
-        &self,
-        for_addr: usize,
-        len: usize,
-    ) -> TritonFileResult<Option<(InodeList, ContentList)>> {
-        let fs = &self.fs;
-
-        let mut node_list = vec![];
-        let mut contents = vec![];
-
-        for entry in fs::read_dir(format!("tmp/{}/inodes", &self.label))? {
-            let entry = entry?;
-            let path = entry.path();
-            let metadata = fs::metadata(&path)?;
-
-            if metadata.is_file() {
-                let inode = path.file_name().unwrap().to_str().unwrap().parse::<u64>()?;
-                let node_attr = fs.get_inode(inode).ok().unwrap();
-                if hash_name_to_idx(&node_attr.gid.to_string(), len) == for_addr {
-                    node_list.push(fs.get_inode(inode).ok().unwrap());
-                    let content_path = fs.content_path(inode);
-                    contents.push(DataList(fs::read(content_path)?));
-                }
-            }
-        }
-        Ok(Some((InodeList(node_list), ContentList(contents))))
-    }
-
-    pub async fn write_all_nodes(
-        &self,
-        inode_list: InodeList,
-        content_list: ContentList,
-    ) -> TritonFileResult<()> {
-        let fs = &self.fs;
-
-        let inode_list = inode_list.0;
-        let content_list = content_list.0;
-        for i in 0..inode_list.len() {
-            let node_attr = inode_list.get(i).unwrap();
-            let inode = fs.allocate_next_inode();
-            let new_node_attr = InodeAttributes {
-                inode,
-                xattrs: node_attr.xattrs,
-                ..*node_attr
-            };
-        }
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -528,6 +491,58 @@ impl KeyList for RemoteFileSystem {
 
 #[async_trait]
 impl ServerFileSystem for RemoteFileSystem {
+    async fn get_all_nodes(
+        &self,
+        for_addr: usize,
+        len: usize,
+    ) -> TritonFileResult<Option<(InodeList, ContentList)>> {
+        let fs = &self.fs;
+
+        let mut node_list = vec![];
+        let mut contents = vec![];
+
+        for entry in fs::read_dir(format!("tmp/{}/inodes", &self.label))? {
+            let entry = entry?;
+            let path = entry.path();
+            let metadata = fs::metadata(&path)?;
+
+            if metadata.is_file() {
+                let inode = path.file_name().unwrap().to_str().unwrap().parse::<u64>()?;
+                let node_attr = fs.get_inode(inode).ok().unwrap();
+                if hash_name_to_idx(&node_attr.gid.to_string(), len) == for_addr {
+                    node_list.push(fs.get_inode(inode).ok().unwrap());
+                    let content_path = fs.content_path(inode);
+                    contents.push(DataList(fs::read(content_path)?));
+                }
+            }
+        }
+        Ok(Some((InodeList(node_list), ContentList(contents))))
+    }
+
+    async fn write_all_nodes(
+        &self,
+        inode_list: InodeList,
+        content_list: ContentList,
+    ) -> TritonFileResult<()> {
+        let fs = &self.fs;
+
+        let inode_list = inode_list.0;
+        let content_list = content_list.0;
+        for i in 0..inode_list.len() {
+            let node_attr = inode_list.get(i).unwrap();
+            let mut old_bTree = node_attr.xattrs.clone();
+            let mut new_bTree = BTreeMap::new();
+            new_bTree.append(&mut old_bTree);
+            let inode = fs.allocate_next_inode();
+            let new_node_attr = InodeAttributes {
+                inode,
+                xattrs: new_bTree,
+                ..*node_attr
+            };
+        }
+        Ok(())
+    }
+
     async fn init(&self, _req: &FileRequest) -> TritonFileResult<c_int> {
         // let fs = &self.fs;
 
