@@ -10,6 +10,7 @@ use std::cmp;
 use std::collections::hash_map::DefaultHasher;
 use std::ffi::OsStr;
 use std::fmt;
+use fuser::FileType;
 use std::hash::{Hash, Hasher};
 use std::sync::atomic;
 use std::time::SystemTime;
@@ -17,6 +18,7 @@ use tribbler::colon;
 use tribbler::error::{TritonFileError, TritonFileResult};
 use tribbler::storage;
 use tribbler::storage::{FileRequest, KeyValue, ServerFileSystem, Storage};
+use crate::client_fs::binstore::storage::DataList;
 
 use super::client;
 
@@ -844,6 +846,92 @@ impl ServerFileSystem for ReliableStore {
                     _bkuptime, flags,
                 )
                 .await
+            {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
+            }
+        }
+    }
+
+    async fn opendir(
+        &self,
+        req: &FileRequest,
+        inode: u64,
+        flags: i32,
+    ) -> TritonFileResult<(Option<(u64, u32)>, c_int)>{
+        loop {
+            let primary = self.primary_store().await?;
+            match primary.opendir(req, inode, flags).await {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
+            }
+        }
+    }
+
+    async fn readdir(
+        &self,
+        _req: &FileRequest,
+        inode: u64,
+        _fh: u64,
+        offset: i64,
+    ) -> TritonFileResult<(Option<(u64, i64, FileType, DataList)>, c_int)>{
+        loop {
+            let primary = self.primary_store().await?;
+            match primary.readdir(_req, inode, _fh, offset).await {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
+            }
+        }
+    }
+
+    async fn releasedir(
+        &self,
+        _req: &FileRequest,
+        inode: u64,
+        _fh: u64,
+        _flags: i32,
+    ) -> TritonFileResult<c_int> {
+        loop {
+            let primary = self.primary_store().await?;
+            let backup = self.backup_store().await?;
+            match primary
+                .releasedir(_req, inode, _fh, _flags)
+                .await
+            {
+                Err(_) => continue,
+                Ok(_) => (),
+            }
+            match backup
+                .releasedir(_req, inode, _fh, _flags)
+                .await
+            {
+                Err(_) => continue,
+                Ok(res) => return Ok(res),
+            }
+        }
+    }
+
+    async fn mkdir(
+        &self,
+        req: &FileRequest,
+        parent: u64,
+        name: &OsStr,
+        mut mode: u32,
+        _umask: u32,
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)>{
+        loop {
+            let primary = self.primary_store().await?;
+            let backup = self.backup_store().await?;
+            match primary
+                .mkdir(req, parent, name, mode, _umask)
+                .await
+            {
+                Err(_) => continue,
+                Ok(_) => (),
+            }
+            match backup
+            .mkdir(req, parent, name, mode, _umask)
+            .await
             {
                 Err(_) => continue,
                 Ok(res) => return Ok(res),

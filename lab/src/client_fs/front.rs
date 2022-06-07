@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tribbler::storage::FileRequest;
 use std::time::{Duration, SystemTime};
 use std::sync::atomic;
+use std::os::unix::ffi::OsStrExt;
 
 use tribbler::error::{TritonFileError, TritonFileResult, SUCCESS};
 use tribbler::storage;
@@ -716,22 +717,101 @@ impl Filesystem for Front {
     }
 
     fn opendir(&mut self, _req: &Request<'_>, _ino: u64, _flags: i32, reply: ReplyOpen) {
-        reply.opened(0, 0);
+        info!("front opendir {}", _ino);
+        let freq = &FileRequest {
+            uid: _req.uid(),
+            gid: _req.gid(),
+            pid: _req.pid(),
+        };
+
+        let gid = _req.gid().to_string().clone();
+        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_res = self.runtime.block_on(bin_pre);
+        
+        info!("front opendir: get bin_res");
+        match bin_res {
+            Ok(bin) => {
+                let bin_opendir_pre = bin.opendir(freq, _ino, _flags);
+
+                let res = self.runtime.block_on(bin_opendir_pre);
+
+                match res {
+                    Ok((res_op, error_code)) => {
+                        if error_code != SUCCESS {
+                            reply.error(error_code);
+                        } else {
+                            let (fh, open_flags) = res_op.unwrap();
+                            reply.opened(fh, open_flags);
+                        }
+                    }
+                    Err(e) => {
+                        info!("opendir error 1 {}", e); 
+                        reply.error(libc::ENETDOWN)
+                    },
+                }
+            }
+            Err(e) => {
+                info!("opendir error 2 {}", e); 
+                reply.error(libc::ENETDOWN)
+            },
+        }
     }
 
     fn readdir(
         &mut self,
-        _req: &Request<'_>,
-        ino: u64,
-        fh: u64,
+        _req: &Request,
+        inode: u64,
+        _fh: u64,
         offset: i64,
-        reply: ReplyDirectory,
+        mut reply: ReplyDirectory,
     ) {
-        info!(
-            "[Not Implemented] readdir(ino: {:#x?}, fh: {}, offset: {})",
-            ino, fh, offset
-        );
-        reply.error(libc::ENOSYS);
+        info!("front readdir {}", &inode);
+        let freq = &FileRequest {
+            uid: _req.uid(),
+            gid: _req.gid(),
+            pid: _req.pid(),
+        };
+
+        let gid = _req.gid().to_string().clone();
+        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_res = self.runtime.block_on(bin_pre);
+        
+        info!("front readdir: get bin_res");
+
+        match bin_res {
+            Ok(bin) => {
+                let bin_readdir_pre = bin.readdir(freq, inode, _fh, offset);
+                let res = self.runtime.block_on(bin_readdir_pre);
+                match res {
+                    Ok((res_op, error_code)) => {
+                        if error_code != SUCCESS {
+                            reply.error(error_code);
+                        } else {
+                            match res_op{
+                                Some((inode, offset, filetype, datalist)) =>{
+                                    let name_vec = datalist.0; 
+                                    let _ = reply.add(
+                                        inode, 
+                                        offset,
+                                        filetype,
+                                        OsStr::from_bytes(&name_vec),
+                                    );           
+                                }, 
+                                None => reply.ok()
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        info!("readdir error 1 {}", e); 
+                        reply.error(libc::ENETDOWN);
+                    },
+                }
+            }
+            Err(e) => {
+                info!("readdir error 2 {}", e); 
+                reply.error(libc::ENETDOWN)
+            },
+        }
     }
 
     fn releasedir(
@@ -742,7 +822,87 @@ impl Filesystem for Front {
         _flags: i32,
         reply: ReplyEmpty,
     ) {
-        reply.ok();
+        info!("front releasedir function {}", _ino);
+        let freq = &FileRequest {
+            uid: _req.uid(),
+            gid: _req.gid(),
+            pid: _req.pid(),
+        };
+        let gid = _req.gid().to_string().clone();
+        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_res = self.runtime.block_on(bin_pre);
+
+        match bin_res {
+            Ok(bin) => {
+                let bin_releasedir_pre = bin.releasedir(freq, _ino, _fh, _flags);
+
+                let res = self.runtime.block_on(bin_releasedir_pre);
+
+                match res {
+                    Ok(error_code) => {
+                        if error_code != SUCCESS {
+                            reply.error(error_code)
+                        } else {
+                            reply.ok();
+                        }
+                    }
+                    Err(e) => {
+                        info!("releasedir error 1 {}", e); 
+                        reply.error(libc::ENETDOWN);
+                    },                
+                }
+            }
+            Err(e) => {
+                info!("releasedir error 2 {}", e); 
+                reply.error(libc::ENETDOWN);
+            }
+        }
     }
 
+
+    fn mkdir(
+        &mut self,
+        req: &Request,
+        parent: u64,
+        name: &OsStr,
+        mut mode: u32,
+        _umask: u32,
+        reply: ReplyEntry,
+    ) {
+        info!("front mkdir function {}", parent);
+        let freq = &FileRequest {
+            uid: req.uid(),
+            gid: req.gid(),
+            pid: req.pid(),
+        };
+        let gid = req.gid().to_string().clone();
+        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_res = self.runtime.block_on(bin_pre);
+
+        match bin_res {
+            Ok(bin) => {
+                let bin_mkdir_pre = bin.mkdir(freq, parent, name, mode, _umask);
+                let res = self.runtime.block_on(bin_mkdir_pre);
+
+                match res {
+                    Ok((attrs_op, error_code)) => {
+                        if error_code != SUCCESS {
+                            reply.error(error_code);
+                        } else {
+                            let attrs = attrs_op.unwrap();
+                            reply.entry(&Duration::new(0, 0), &attrs, 0);
+                        }
+                    }
+                    Err(e) => {
+                        info!("mkdir error 1 {}", e); 
+                        reply.error(libc::ENETDOWN);
+                    },
+                }
+            }
+            Err(e) => {
+                info!("mkdir error 2 {}", e); 
+                reply.error(libc::ENETDOWN);
+            }
+        }
+    }
 }

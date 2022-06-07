@@ -661,10 +661,9 @@ dependencies = [
 [[package]]
 name = "fuser"
 version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aef8400a4ea1d18a8302e2952f5137a9a21ab257825ccc7d67db4a8018b89022"
 dependencies = [
- "bincode",
- "clap",
- "env_logger",
  "libc",
  "log",
  "memchr",
@@ -672,7 +671,6 @@ dependencies = [
  "pkg-config",
  "serde",
  "smallvec",
- "tempfile",
  "users",
  "zerocopy",
 ]

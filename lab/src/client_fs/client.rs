@@ -2,6 +2,7 @@ use std::cmp::min;
 use std::ffi::OsStr;
 use std::time::UNIX_EPOCH;
 
+use fuser::FileType;
 use log::info;
 use async_trait::async_trait;
 use fuser::FileAttr;
@@ -10,6 +11,7 @@ use fuser::TimeOrNow;
 use libc::c_int;
 use tribbler::disfuser;
 use tribbler::disfuser::Init;
+use tribbler::storage::DataList;
 use std::time::SystemTime;
 use tokio::sync::Mutex;
 use tokio_stream::Stream;
@@ -19,7 +21,7 @@ use tonic::Code;
 use tribbler::disfuser::disfuser_client::DisfuserClient;
 use tribbler::disfuser::{
     Access, Create, FRequest, Getattr, Getxattr, Listxattr, LookUp, Open, Read, Release, Rename,
-    Setxattr, Unlink, Write, Setattr
+    Setxattr, Unlink, Write, Setattr, OpenDir, ReadDir, ReleaseDir, MkDir
 };
 use tribbler::disfuser_server::slice_size;
 use tribbler::error::{TritonFileResult, SUCCESS};
@@ -741,6 +743,155 @@ impl ServerFileSystem for StorageClient {
             return Ok((None, error_code));
         }
         let received_attr = setattr_reply.file_attr;
+        let fileattr = serde_json::from_str::<FileAttr>(&received_attr).unwrap();
+        Ok((Some(fileattr), SUCCESS))
+    }
+
+    async fn opendir(
+        &self,
+        req: &FileRequest,
+        inode: u64,
+        flags: i32,
+    ) -> TritonFileResult<(Option<(u64, u32)>, c_int)>{
+        let freq = FRequest {
+            uid: req.uid,
+            gid: req.gid,
+            pid: req.pid,
+        };
+        let mut client = self.disfuser_client().await;
+        let result = client
+            .opendir(OpenDir {
+                frequest: freq,
+                ino: inode, 
+                flags: flags,
+            })
+            .await?;
+
+        let opendir_reply = result.into_inner();
+        let error_code = opendir_reply.errcode;
+        if error_code != SUCCESS {
+            return Ok((None, error_code));
+        }
+        let fh = opendir_reply.fh;
+        let flags = opendir_reply.flags; 
+        Ok((Some((fh, flags)), SUCCESS))
+    }
+
+    async fn readdir(
+        &self,
+        _req: &FileRequest,
+        inode: u64,
+        _fh: u64,
+        offset: i64,
+    ) -> TritonFileResult<(Option<(u64, i64, FileType, DataList)>, c_int)>{
+        let freq = FRequest {
+            uid: _req.uid,
+            gid: _req.gid,
+            pid: _req.pid,
+        };
+
+        let mut client = self.disfuser_client().await;
+        let result = client
+            .readdir(ReadDir {
+                frequest: freq,
+                ino: inode, 
+                fh: _fh, 
+                offset: offset
+            })
+            .await?;
+
+        let readdir_reply = result.into_inner();
+        let error_code = readdir_reply.errcode;
+        if error_code != SUCCESS {
+            return Ok((None, error_code));
+        }
+
+        let ino = readdir_reply.ino; 
+        let offset = readdir_reply.offset; 
+        let filetype = readdir_reply.file_type; 
+        let name = readdir_reply.name; 
+
+        match ino{
+            Some(_) => {
+                let ino_ = ino.unwrap(); 
+                let offset_ = offset.unwrap();
+                let filetype_str = filetype.unwrap();
+                let name_str = name.unwrap();
+                let name_ptr = name_str.as_bytes();
+
+                let filetype_ = serde_json::from_str::<FileType>(&filetype_str).unwrap();
+                let datalist_ = storage::DataList(name_ptr.to_vec());
+
+                return  Ok((Some((ino_, offset_, filetype_, datalist_)), SUCCESS))
+            }
+            None => return Ok((None, SUCCESS))
+        }
+
+        // string-> datalist 
+        // datalist.0 -> name: vec[u8]
+        // OsStr::from_bytes(name),        
+    }
+
+    async fn releasedir(
+        &self,
+        _req: &FileRequest,
+        inode: u64,
+        _fh: u64,
+        _flags: i32,
+    ) -> TritonFileResult<c_int> {
+        let freq = FRequest {
+            uid: _req.uid,
+            gid: _req.gid,
+            pid: _req.pid,
+        };
+        let mut client = self.disfuser_client().await;
+        let result = client
+            .releasedir(ReleaseDir {
+                frequest: freq,
+                inode: inode, 
+                fh: _fh, 
+                flags: _flags,
+            })
+            .await?;
+        let error_code = result.into_inner().errcode;
+        if error_code != SUCCESS {
+            return Ok(error_code);
+        }
+        Ok(SUCCESS)
+    }
+
+    async fn mkdir(
+        &self,
+        req: &FileRequest,
+        parent: u64,
+        name: &OsStr,
+        mut mode: u32,
+        _umask: u32,
+    ) -> TritonFileResult<(Option<FileAttr>, c_int)>{
+        let freq = FRequest {
+            uid: req.uid,
+            gid: req.gid,
+            pid: req.pid,
+        };
+
+        let name_string = name.to_str().unwrap().to_string();
+
+        let mut client = self.disfuser_client().await;
+        let result = client
+            .mkdir(MkDir {
+                frequest: freq,
+                parent: parent,
+                name: name_string, 
+                mode: mode, 
+                umask: _umask,
+            })
+            .await?;
+        let mkdir_reply = result.into_inner();
+        let error_code = mkdir_reply.errcode;
+        if error_code != SUCCESS {
+            return Ok((None, error_code));
+        }
+        let received_attr = mkdir_reply.fileattr;
         let fileattr = serde_json::from_str::<FileAttr>(&received_attr).unwrap();
         Ok((Some(fileattr), SUCCESS))
     }

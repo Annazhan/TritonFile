@@ -100,7 +100,7 @@ fn main() -> TritonFileResult<()> {
     info!("The file system is ready to be mounted");
     let result = fuser::mount2(
         front, 
-        "/Users/lynnz/Desktop/tmp",
+        "/Users/stella/Desktop/tmp",
         &options,
     );
     dbg!(&result);
