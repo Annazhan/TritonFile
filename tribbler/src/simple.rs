@@ -50,7 +50,7 @@ type Inode = u64;
 
 type DirectoryDescriptor = BTreeMap<Vec<u8>, (Inode, FileKind)>;
 
-#[derive(Serialize, Deserialize, Copy, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Copy, Clone, PartialEq, Debug)]
 pub enum FileKind {
     File,
     Directory,
@@ -202,7 +202,7 @@ pub fn time_from_system_time(system_time: &SystemTime) -> (i64, u32) {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct InodeAttributes {
     pub inode: Inode,
     pub open_file_handles: u64, // Ref count of open file handles to this inode

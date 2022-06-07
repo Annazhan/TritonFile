@@ -18,13 +18,12 @@ use tribbler::{
     config::KeeperConfig,
     error::TritonFileResult,
     storage::{KeyValue, FileRequest},
-    storage::{self, Storage},
+    storage::{self, Storage, hash_name_to_idx},
 };
 
 use crate::client_fs::client::new_client;
 
-use super::binstore::{self, hash_name_to_idx, BinStore};
-
+use super::binstore::{self, BinStore};
 #[derive(Serialize, Deserialize, Debug)]
 enum LiveState {
     True(bool),
@@ -312,6 +311,24 @@ impl Keeper {
                 }
             }
         }
+        Ok(())
+    }
+
+    async fn replicate_file(&self,
+        from: usize,
+        to: usize,
+        for_addr: usize,
+        live_list: &Vec<bool>,)
+    -> TritonFileResult<()> {
+        info!("{}: replicating {} to {}", self.print_name(), from, to);
+        let (from_cli, to_cli) = {
+            let backs = self.backs.lock().await;
+            (
+                new_client(&backs[from]).await?,
+                new_client(&backs[to]).await?,
+            )
+        };
+
         Ok(())
     }
 

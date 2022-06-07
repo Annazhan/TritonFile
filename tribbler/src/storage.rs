@@ -13,12 +13,16 @@ use fuser::TimeOrNow;
 use fuser::TimeOrNow::Now;
 use fuser::FUSE_ROOT_ID;
 use libc::c_int;
+use libc::NOTE_USECONDS;
 use log::error;
 use log::info;
 use std::cmp::min;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::fs::OpenOptions;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::io;
 use std::io::Seek;
 use std::io::SeekFrom;
@@ -101,6 +105,17 @@ pub struct List(pub Vec<String>);
 
 #[derive(Debug, Clone)]
 pub struct DataList(pub Vec<u8>);
+
+#[derive(Debug, Clone)]
+pub struct InodeList(pub Vec<InodeAttributes>);
+#[derive(Debug, Clone)]
+pub struct ContentList(pub Vec<DataList>);
+
+pub fn hash_name_to_idx(name: &str, len: usize) -> usize {
+    let mut hasher = DefaultHasher::new();
+    name.hash(&mut hasher);
+    hasher.finish() as usize % len
+}
 
 #[async_trait]
 /// Key-value pair interfaces
@@ -316,6 +331,7 @@ pub struct RemoteFileSystem {
     kv_list: RwLock<HashMap<String, List>>,
     clock: RwLock<u64>,
     fs: SimpleFS,
+    label: usize,
 }
 
 impl RemoteFileSystem {
@@ -363,7 +379,57 @@ impl RemoteFileSystem {
             kv_list: RwLock::new(HashMap::new()),
             clock: RwLock::new(0),
             fs,
+            label: num,
         }
+    }
+
+    pub async fn get_all_nodes(
+        &self,
+        for_addr: usize,
+        len: usize,
+    ) -> TritonFileResult<Option<(InodeList, ContentList)>> {
+        let fs = &self.fs;
+
+        let mut node_list = vec![];
+        let mut contents = vec![];
+
+        for entry in fs::read_dir(format!("tmp/{}/inodes", &self.label))? {
+            let entry = entry?;
+            let path = entry.path();
+            let metadata = fs::metadata(&path)?;
+
+            if metadata.is_file() {
+                let inode = path.file_name().unwrap().to_str().unwrap().parse::<u64>()?;
+                let node_attr = fs.get_inode(inode).ok().unwrap();
+                if hash_name_to_idx(&node_attr.gid.to_string(), len) == for_addr {
+                    node_list.push(fs.get_inode(inode).ok().unwrap());
+                    let content_path = fs.content_path(inode);
+                    contents.push(DataList(fs::read(content_path)?));
+                }
+            }
+        }
+        Ok(Some((InodeList(node_list), ContentList(contents))))
+    }
+
+    pub async fn write_all_nodes(
+        &self,
+        inode_list: InodeList,
+        content_list: ContentList,
+    ) -> TritonFileResult<()> {
+        let fs = &self.fs;
+
+        let inode_list = inode_list.0;
+        let content_list = content_list.0;
+        for i in 0..inode_list.len() {
+            let node_attr = inode_list.get(i).unwrap();
+            let inode = fs.allocate_next_inode();
+            let new_node_attr = InodeAttributes {
+                inode,
+                xattrs: node_attr.xattrs,
+                ..*node_attr
+            };
+        }
+        Ok(())
     }
 }
 

@@ -53,6 +53,12 @@ impl StorageClient {
     pub async fn disfuser_client(&self) -> DisfuserClient<Channel> {
         DisfuserClient::new(self.channel.lock().await.clone())
     }
+
+    pub async fn get_indoes() -> TritonFileResult<Option<>> {
+        Ok(())
+    }
+
+    pub async fn write_inodes() ->
 }
 
 // convert the write into a write stream

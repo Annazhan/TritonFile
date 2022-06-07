@@ -445,12 +445,6 @@ impl BinStore {
     }
 }
 
-pub fn hash_name_to_idx(name: &str, len: usize) -> usize {
-    let mut hasher = DefaultHasher::new();
-    name.hash(&mut hasher);
-    hasher.finish() as usize % len
-}
-
 #[async_trait]
 impl storage::BinStorage for BinStore {
     async fn bin(&self, name: &str) -> TritonFileResult<Box<dyn Storage>> {
