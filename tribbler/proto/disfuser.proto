@@ -245,12 +245,11 @@ message KeyValue {
   }
 
   message ReadDirReply {
-    required uint64 ino = 1;
-    required int64 offset = 2; 
-    required string fileType = 3; 
-    required string name = 4; 
+    optional uint64 ino = 1;
+    optional int64 offset = 2; 
+    optional string fileType = 3; 
+    optional string name = 4; 
     required int32 errcode = 5; 
-
   }
 
   message OpenDir{

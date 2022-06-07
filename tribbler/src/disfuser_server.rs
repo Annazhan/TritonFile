@@ -861,21 +861,29 @@ impl Disfuser for DisfuserServer {
             Ok((value, errcode)) => {
                 if errcode != SUCCESS {
                     Ok(Response::new(ReadDirReply {
-                        ino: 0,
-                        offset: 0,
-                        file_type: "".to_string(),
-                        name: "".to_string(),
+                        ino: None,
+                        offset: None,
+                        file_type: None,
+                        name: None,
                         errcode,
                     }))
                 } else {
-                    let v = value.unwrap();
-                    Ok(Response::new(ReadDirReply {
-                        ino: v.0,
-                        offset: v.1,
-                        file_type: serde_json::to_string(&v.2).unwrap(),
-                        name: std::str::from_utf8(&v.3 .0).unwrap().to_string(),
-                        errcode,
-                    }))
+                    match value {
+                        Some(result) => Ok(Response::new(ReadDirReply {
+                            ino: Some(result.0),
+                            offset: Some(result.1),
+                            file_type: Some(serde_json::to_string(&result.2).unwrap()),
+                            name: Some(std::str::from_utf8(&result.3 .0).unwrap().to_string()),
+                            errcode,
+                        })),
+                        None => Ok(Response::new(ReadDirReply {
+                            ino: None,
+                            offset: None,
+                            file_type: None,
+                            name: None,
+                            errcode,
+                        })),
+                    }
                 }
             }
             Err(_) => Err(Status::invalid_argument("getattr failed")),

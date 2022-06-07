@@ -361,14 +361,14 @@ pub struct ReadDir {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ReadDirReply {
-    #[prost(uint64, required, tag = "1")]
-    pub ino: u64,
-    #[prost(int64, required, tag = "2")]
-    pub offset: i64,
-    #[prost(string, required, tag = "3")]
-    pub file_type: ::prost::alloc::string::String,
-    #[prost(string, required, tag = "4")]
-    pub name: ::prost::alloc::string::String,
+    #[prost(uint64, optional, tag = "1")]
+    pub ino: ::core::option::Option<u64>,
+    #[prost(int64, optional, tag = "2")]
+    pub offset: ::core::option::Option<i64>,
+    #[prost(string, optional, tag = "3")]
+    pub file_type: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "4")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(int32, required, tag = "5")]
     pub errcode: i32,
 }

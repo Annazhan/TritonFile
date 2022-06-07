@@ -39,6 +39,7 @@ use crate::error::SUCCESS;
 use crate::simple;
 use crate::simple::check_access;
 use crate::simple::clear_suid_sgid;
+use crate::simple::creation_gid;
 use crate::simple::get_groups;
 use crate::simple::time_from_system_time;
 use crate::simple::time_now;
@@ -46,6 +47,7 @@ use crate::simple::xattr_access_check;
 use crate::simple::FileKind;
 use crate::simple::InodeAttributes;
 use crate::simple::SimpleFS;
+use crate::simple::BLOCK_SIZE;
 use crate::simple::FMODE_EXEC;
 
 use fuser::{BackgroundSession, FileAttr, MountOption, Request};
@@ -268,7 +270,7 @@ pub trait ServerFileSystem {
     ) -> TritonFileResult<(Option<(u64, i64, FileType, DataList)>, c_int)>;
 
     async fn releasedir(
-        &mut self,
+        &self,
         _req: &FileRequest,
         inode: u64,
         _fh: u64,
@@ -1327,30 +1329,33 @@ impl ServerFileSystem for RemoteFileSystem {
         for (index, entry) in entries.iter().skip(offset as usize).enumerate() {
             let (name, (inode, file_type)) = entry;
 
-            let buffer_full: bool = reply.add(
-                *inode,
-                offset + index as i64 + 1,
-                (*file_type).into(),
-                OsStr::from_bytes(name),
-            );
-
-            if buffer_full {
-                break;
-            }
+            return Ok((
+                Some((
+                    *inode,
+                    offset + index as i64 + 1,
+                    (*file_type).into(),
+                    DataList(name.to_vec()),
+                )),
+                SUCCESS,
+            ));
         }
 
-        reply.ok();
-        Ok(())
+        // might need to change to suceess
+        return Ok((None, SUCCESS));
     }
 
     async fn releasedir(
-        &mut self,
+        &self,
         _req: &FileRequest,
         inode: u64,
         _fh: u64,
         _flags: i32,
     ) -> TritonFileResult<c_int> {
-        Ok(())
+        let fs = &self.fs;
+        if let Ok(mut attrs) = fs.get_inode(inode) {
+            attrs.open_file_handles -= 1;
+        }
+        Ok(SUCCESS)
     }
 
     async fn opendir(
@@ -1359,7 +1364,41 @@ impl ServerFileSystem for RemoteFileSystem {
         inode: u64,
         flags: i32,
     ) -> TritonFileResult<(Option<(u64, u32)>, c_int)> {
-        Ok(())
+        let fs = &self.fs;
+
+        info!("opendir() called on {:?}", inode);
+        let (access_mask, read, write) = match flags & libc::O_ACCMODE {
+            libc::O_RDONLY => {
+                // Behavior is undefined, but most filesystems return EACCES
+                if flags & libc::O_TRUNC != 0 {
+                    return Ok((None, libc::EACCES));
+                }
+                (libc::R_OK, true, false)
+            }
+            libc::O_WRONLY => (libc::W_OK, false, true),
+            libc::O_RDWR => (libc::R_OK | libc::W_OK, true, true),
+            // Exactly one access mode flag must be specified
+            _ => {
+                return Ok((None, libc::EINVAL));
+            }
+        };
+
+        match fs.get_inode(inode) {
+            Ok(mut attr) => {
+                if check_access(attr.uid, attr.gid, attr.mode, req.uid, req.gid, access_mask) {
+                    attr.open_file_handles += 1;
+                    fs.write_inode(&attr);
+                    let open_flags = if fs.direct_io { FOPEN_DIRECT_IO } else { 0 };
+                    return Ok((
+                        Some((fs.allocate_next_file_handle(read, write), open_flags)),
+                        SUCCESS,
+                    ));
+                } else {
+                    return Ok((None, libc::EACCES));
+                }
+            }
+            Err(error_code) => Ok((None, error_code)),
+        }
     }
 
     async fn mkdir(
@@ -1370,7 +1409,68 @@ impl ServerFileSystem for RemoteFileSystem {
         mut mode: u32,
         _umask: u32,
     ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
-        Ok(())
+        let fs = &self.fs;
+
+        info!("mkdir() called with {:?} {:?} {:o}", parent, name, mode);
+        if fs.lookup_name(parent, name).is_ok() {
+            return Ok((None, libc::EEXIST));
+        }
+
+        let mut parent_attrs = match fs.get_inode(parent) {
+            Ok(attrs) => attrs,
+            Err(error_code) => {
+                return Ok((None, error_code));
+            }
+        };
+
+        if !check_access(
+            parent_attrs.uid,
+            parent_attrs.gid,
+            parent_attrs.mode,
+            req.uid,
+            req.gid,
+            libc::W_OK,
+        ) {
+            return Ok((None, libc::EACCES));
+        }
+        parent_attrs.last_modified = time_now();
+        parent_attrs.last_metadata_changed = time_now();
+        fs.write_inode(&parent_attrs);
+
+        if req.uid != 0 {
+            mode &= !(libc::S_ISUID | libc::S_ISGID) as u32;
+        }
+        if parent_attrs.mode & libc::S_ISGID as u16 != 0 {
+            mode |= libc::S_ISGID as u32;
+        }
+
+        let inode = fs.allocate_next_inode();
+        let attrs = InodeAttributes {
+            inode,
+            open_file_handles: 0,
+            size: BLOCK_SIZE,
+            last_accessed: time_now(),
+            last_modified: time_now(),
+            last_metadata_changed: time_now(),
+            kind: FileKind::Directory,
+            mode: fs.creation_mode(mode),
+            hardlinks: 2, // Directories start with link count of 2, since they have a self link
+            uid: req.uid,
+            gid: creation_gid(&parent_attrs, req.gid),
+            xattrs: Default::default(),
+        };
+        fs.write_inode(&attrs);
+
+        let mut entries = BTreeMap::new();
+        entries.insert(b".".to_vec(), (inode, FileKind::Directory));
+        entries.insert(b"..".to_vec(), (parent, FileKind::Directory));
+        fs.write_directory_content(inode, entries);
+
+        let mut entries = fs.get_directory_content(parent).unwrap();
+        entries.insert(name.as_bytes().to_vec(), (inode, FileKind::Directory));
+        fs.write_directory_content(parent, entries);
+
+        return Ok((Some(attrs.into()), SUCCESS));
     }
 }
 
