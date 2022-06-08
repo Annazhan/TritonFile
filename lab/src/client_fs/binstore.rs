@@ -8,7 +8,6 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tribbler::storage::ContentList;
 use tribbler::storage::InodeList;
-use tribbler::storage::hash_name_to_idx;
 use std::cmp;
 use std::collections::hash_map::DefaultHasher;
 use std::ffi::OsStr;
@@ -512,6 +511,7 @@ impl ServerFileSystem for ReliableStore {
     ) -> TritonFileResult<()>{
         Ok(())
     }
+
     async fn init(&self, _req: &FileRequest) -> TritonFileResult<c_int>{
         loop {
             let primary = self.primary_store().await?;
@@ -894,7 +894,7 @@ impl ServerFileSystem for ReliableStore {
             let backup = self.backup_store().await?;
             match primary.opendir(req, inode, flags).await {
                 Err(_) => continue,
-                Ok(res) => (),
+                Ok(_) => (),
             }
             match backup.opendir(req, inode, flags).await {
                 Err(_) => continue,

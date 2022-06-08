@@ -152,6 +152,18 @@ pub trait KeyList {
 
 #[async_trait]
 pub trait ServerFileSystem {
+    async fn get_all_nodes(
+        &self,
+        for_addr: usize,
+        len: usize,
+    ) -> TritonFileResult<Option<(InodeList, ContentList)>>;
+
+    async fn write_all_nodes(
+        &self,
+        inode_list: InodeList,
+        content_list: ContentList,
+    ) -> TritonFileResult<()>;
+
     async fn read(
         &self,
         _req: &FileRequest,
@@ -338,20 +350,22 @@ impl RemoteFileSystem {
     /// Creates a new instance of [MemStorage]
     pub fn new(num: usize) -> RemoteFileSystem {
         if !fs::metadata(format!("tmp/{}", num)).is_ok() {
-            info!("try to create metadata file");
+            info!("try to create metadata file: main_dir",);
             fs::create_dir_all(format!("tmp/{}", num)).unwrap();
         }
 
         let fs = SimpleFS::new(format!("tmp/{}", num), false, false);
 
         if !fs::metadata(Path::new(&fs.data_dir).join("inodes")).is_ok() {
-            info!("try to create metadata file");
+            info!("try to create metadata file: inode_dir");
             fs::create_dir_all(Path::new(&fs.data_dir).join("inodes")).unwrap();
         }
+
         if !fs::metadata(Path::new(&fs.data_dir).join("contents")).is_ok() {
-            info!("try to create metadata file");
+            info!("try to create metadata file: content_dir");
             fs::create_dir_all(Path::new(&fs.data_dir).join("contents")).unwrap();
         }
+
         if fs.get_inode(FUSE_ROOT_ID).is_err() {
             // Initialize with empty filesystem
             let root = InodeAttributes {
@@ -382,55 +396,6 @@ impl RemoteFileSystem {
             label: num,
         }
     }
-
-    pub async fn get_all_nodes(
-        &self,
-        for_addr: usize,
-        len: usize,
-    ) -> TritonFileResult<Option<(InodeList, ContentList)>> {
-        let fs = &self.fs;
-
-        let mut node_list = vec![];
-        let mut contents = vec![];
-
-        for entry in fs::read_dir(format!("tmp/{}/inodes", &self.label))? {
-            let entry = entry?;
-            let path = entry.path();
-            let metadata = fs::metadata(&path)?;
-
-            if metadata.is_file() {
-                let inode = path.file_name().unwrap().to_str().unwrap().parse::<u64>()?;
-                let node_attr = fs.get_inode(inode).ok().unwrap();
-                if hash_name_to_idx(&node_attr.gid.to_string(), len) == for_addr {
-                    node_list.push(fs.get_inode(inode).ok().unwrap());
-                    let content_path = fs.content_path(inode);
-                    contents.push(DataList(fs::read(content_path)?));
-                }
-            }
-        }
-        Ok(Some((InodeList(node_list), ContentList(contents))))
-    }
-
-    // pub async fn write_all_nodes(
-    //     &self,
-    //     inode_list: InodeList,
-    //     content_list: ContentList,
-    // ) -> TritonFileResult<()> {
-    //     let fs = &self.fs;
-
-    //     let inode_list = inode_list.0;
-    //     let content_list = content_list.0;
-    //     for i in 0..inode_list.len() {
-    //         let node_attr = inode_list.get(i).unwrap();
-    //         let inode = fs.allocate_next_inode();
-    //         let new_node_attr = InodeAttributes {
-    //             inode,
-    //             xattrs: node_attr.xattrs,
-    //             ..*node_attr
-    //         };
-    //     }
-    //     Ok(())
-    // }
 }
 
 #[async_trait]
@@ -528,6 +493,68 @@ impl KeyList for RemoteFileSystem {
 
 #[async_trait]
 impl ServerFileSystem for RemoteFileSystem {
+    async fn get_all_nodes(
+        &self,
+        for_addr: usize,
+        len: usize,
+    ) -> TritonFileResult<Option<(InodeList, ContentList)>> {
+        let fs = &self.fs;
+
+        let mut node_list = vec![];
+        let mut contents = vec![];
+
+        for entry in fs::read_dir(format!("tmp/{}/inodes", &self.label))? {
+            let entry = entry?;
+            let path = entry.path();
+            let metadata = fs::metadata(&path)?;
+
+            if metadata.is_file() {
+                let inode = path.file_name().unwrap().to_str().unwrap().parse::<u64>()?;
+                let node_attr = fs.get_inode(inode).ok().unwrap();
+                if hash_name_to_idx(&node_attr.gid.to_string(), len) == for_addr {
+                    node_list.push(fs.get_inode(inode).ok().unwrap());
+                    let content_path = fs.content_path(inode);
+                    contents.push(DataList(fs::read(content_path)?));
+                }
+            }
+        }
+        Ok(Some((InodeList(node_list), ContentList(contents))))
+    }
+
+    async fn write_all_nodes(
+        &self,
+        inode_list: InodeList,
+        content_list: ContentList,
+    ) -> TritonFileResult<()> {
+        let fs = &self.fs;
+
+        let inode_list = inode_list.0;
+        let content_list = content_list.0;
+        for i in 0..inode_list.len() {
+            let node_attr = inode_list.get(i).unwrap();
+            let mut old_bTree = node_attr.xattrs.clone();
+            let mut new_bTree = BTreeMap::new();
+            new_bTree.append(&mut old_bTree);
+            let inode = fs.allocate_next_inode();
+            let new_node_attr = InodeAttributes {
+                inode,
+                xattrs: new_bTree,
+                ..*node_attr
+            };
+            fs.write_inode(&new_node_attr);
+            let contents = content_list.get(i).unwrap();
+            let content_path = fs.content_path(inode);
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&content_path)
+                .unwrap();
+            file.write(&contents.0[..])?;
+        }
+        Ok(())
+    }
+
     async fn init(&self, _req: &FileRequest) -> TritonFileResult<c_int> {
         // let fs = &self.fs;
 
@@ -605,9 +632,7 @@ impl ServerFileSystem for RemoteFileSystem {
         #[allow(unused_variables)] flags: i32,
         _lock_owner: Option<u64>,
     ) -> TritonFileResult<(Option<u32>, c_int)> {
-        info!("metadata call write() {}", inode);
         let fs = &self.fs;
-
         info!(
             "No.{:?} gid:{:?} uid:{:?} write() called with {:?} size={:?}",
             self.label,
@@ -658,6 +683,7 @@ impl ServerFileSystem for RemoteFileSystem {
             "No.{:?} gid:{:?} uid:{:?} lookup() called with {:?} ",
             self.label, req.gid, req.uid, parent
         );
+
         let fs = &self.fs;
         if name.len() > simple::MAX_NAME_LENGTH as usize {
             return Ok((None, libc::ENAMETOOLONG));
@@ -686,11 +712,13 @@ impl ServerFileSystem for RemoteFileSystem {
         parent: u64,
         name: &OsStr,
     ) -> TritonFileResult<c_int> {
-        let fs = &self.fs;
         info!(
             "No.{:?} gid:{:?} uid:{:?} unlink() called with {:?}",
             self.label, req.gid, req.uid, parent
         );
+
+        let fs = &self.fs;
+
         let mut attrs = match fs.lookup_name(parent, name) {
             Ok(attrs) => attrs,
             Err(error_code) => {
@@ -751,11 +779,12 @@ impl ServerFileSystem for RemoteFileSystem {
         _umask: u32,
         flags: i32,
     ) -> TritonFileResult<(Option<(FileAttr, u64)>, c_int)> {
-        let fs = &self.fs;
         info!(
             "No.{:?} gid:{:?} uid:{:?} create() called with {:?} {:?}",
             self.label, req.gid, req.uid, parent, name
         );
+
+        let fs = &self.fs;
         if fs.lookup_name(parent, name).is_ok() {
             return Ok((None, libc::EEXIST));
         }
@@ -837,11 +866,12 @@ impl ServerFileSystem for RemoteFileSystem {
         _req: &FileRequest,
         ino: u64,
     ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
-        let fs = &self.fs;
         info!(
             "No.{:?} gid:{:?} uid:{:?} getattr() call with {:?}",
             self.label, _req.gid, _req.uid, ino
         );
+
+        let fs = &self.fs;
         match fs.get_inode(ino) {
             Ok(attrs) => Ok((Some(attrs.into()), SUCCESS)),
             Err(error_code) => Ok((None, error_code)),
@@ -854,12 +884,13 @@ impl ServerFileSystem for RemoteFileSystem {
         inode: u64,
         flags: i32,
     ) -> TritonFileResult<(Option<(u64, u32)>, c_int)> {
-        let fs = &self.fs;
-
         info!(
             "No.{:?} gid:{:?} uid:{:?} open() called for {:?}",
             self.label, req.gid, req.uid, inode
         );
+
+        let fs = &self.fs;
+
         let (access_mask, read, write) = match flags & libc::O_ACCMODE {
             libc::O_RDONLY => {
                 // Behavior is undefined, but most filesystems return EACCES
@@ -912,6 +943,7 @@ impl ServerFileSystem for RemoteFileSystem {
             "No.{:?} gid:{:?} uid:{:?} release() called for {:?}",
             self.label, _req.gid, _req.uid, inode
         );
+
         let fs = &self.fs;
         if let Ok(mut attrs) = fs.get_inode(inode) {
             attrs.open_file_handles -= 1;
@@ -932,6 +964,7 @@ impl ServerFileSystem for RemoteFileSystem {
             "No.{:?} gid:{:?} uid:{:?} setxattr() called for {:?}",
             self.label, request.gid, request.uid, inode
         );
+
         let fs = &self.fs;
         if let Ok(mut attrs) = fs.get_inode(inode) {
             if let Err(error) = xattr_access_check(key.as_bytes(), libc::W_OK, &attrs, request) {
@@ -1032,14 +1065,12 @@ impl ServerFileSystem for RemoteFileSystem {
     }
 
     async fn access(&self, req: &FileRequest, inode: u64, mask: i32) -> TritonFileResult<c_int> {
-        let fs = &self.fs;
-
         info!(
             "No.{:?}, gid:{:?}, uid:{:?}, access() called with {:?} {:?}",
             self.label, req.gid, req.uid, inode, mask
         );
 
-        info!("the file request is {:?}", req);
+        let fs = &self.fs;
         match fs.get_inode(inode) {
             Ok(attr) => {
                 info!(
@@ -1479,12 +1510,9 @@ impl ServerFileSystem for RemoteFileSystem {
             "No.{:?} gid:{:?} uid:{:?} releasedir() called with {:?} {:?}",
             self.label, _req.gid, _req.uid, inode, _fh
         );
+
         let fs = &self.fs;
         if let Ok(mut attrs) = fs.get_inode(inode) {
-            info!(
-                "releasedir attrs.open_file_handles:{:?}",
-                attrs.open_file_handles
-            );
             attrs.open_file_handles -= 1;
         }
         Ok(SUCCESS)
@@ -1496,12 +1524,12 @@ impl ServerFileSystem for RemoteFileSystem {
         inode: u64,
         flags: i32,
     ) -> TritonFileResult<(Option<(u64, u32)>, c_int)> {
-        let fs = &self.fs;
-
         info!(
             "No.{:?} gid:{:?} uid:{:?} opendir() called on {:?}",
             self.label, req.gid, req.uid, inode
         );
+
+        let fs = &self.fs;
         let (access_mask, read, write) = match flags & libc::O_ACCMODE {
             libc::O_RDONLY => {
                 // Behavior is undefined, but most filesystems return EACCES
@@ -1544,11 +1572,12 @@ impl ServerFileSystem for RemoteFileSystem {
         mut mode: u32,
         _umask: u32,
     ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
-        let fs = &self.fs;
         info!(
             "No.{:?} gid:{:?} uid:{:?} mkdir() called with {:?} {:?} {:o}",
             self.label, req.gid, req.uid, parent, name, mode
         );
+
+        let fs = &self.fs;
         if fs.lookup_name(parent, name).is_ok() {
             return Ok((None, libc::EEXIST));
         }
