@@ -1,14 +1,15 @@
 use crate::disfuser::disfuser_server::{self, Disfuser};
 use crate::disfuser::{
-    self, Access, AccessReply, Create, CreateReply, Getattr, GetattrReply, Getxattr, GetxattrReply,
-    Init, InitReply, Listxattr, ListxattrReply, LookUp, MkDir, MkDirReply, Open, OpenDir,
-    OpenDirReply, OpenReply, Read, ReadDir, ReadDirReply, Release, ReleaseDir, ReleaseDirReply,
-    ReleaseReply, Rename, RenameReply, Reply, Setattr, SetattrReply, Setxattr, SetxattrReply,
-    Unlink, UnlinkReply, Write, WriteReply,
+    self, Access, AccessReply, Create, CreateReply, GetAllNodes, GetAllNodesReply, Getattr,
+    GetattrReply, Getxattr, GetxattrReply, Init, InitReply, Listxattr, ListxattrReply, LookUp,
+    MkDir, MkDirReply, Open, OpenDir, OpenDirReply, OpenReply, Read, ReadDir, ReadDirReply,
+    Release, ReleaseDir, ReleaseDirReply, ReleaseReply, Rename, RenameReply, Reply, Setattr,
+    SetattrReply, Setxattr, SetxattrReply, Unlink, UnlinkReply, Write, WriteAllNodes,
+    WriteAllNodesReply, WriteReply,
 };
 use crate::error::SUCCESS;
-use crate::storage::FileRequest;
-use crate::storage::Storage;
+use crate::simple::InodeAttributes;
+use crate::storage::{ContentList, DataList, FileRequest, InodeList, Storage};
 use async_trait::async_trait;
 use fuser::{BackgroundSession, FileAttr, MountOption, Request, TimeOrNow};
 use log::info;
@@ -728,7 +729,7 @@ impl Disfuser for DisfuserServer {
         // change fileAttr to string
         match result {
             Ok(value) => Ok(Response::new(AccessReply { errcode: value })),
-            Err(_) => Err(Status::invalid_argument("getattr failed")),
+            Err(_) => Err(Status::invalid_argument("access failed")),
         }
     }
 
@@ -886,7 +887,85 @@ impl Disfuser for DisfuserServer {
                     }
                 }
             }
-            Err(_) => Err(Status::invalid_argument("getattr failed")),
+            Err(_) => Err(Status::invalid_argument("readdir failed")),
+        }
+    }
+
+    async fn get_all_nodes(
+        &self,
+        request: tonic::Request<GetAllNodes>,
+    ) -> Result<tonic::Response<GetAllNodesReply>, tonic::Status> {
+        let request_inner = request.into_inner();
+        let result = self
+            .filesystem
+            .get_all_nodes(request_inner.for_addr as usize, request_inner.len as usize)
+            .await;
+
+        match result {
+            Ok(value) => match value {
+                Some(v) => {
+                    let inode_list = v.0;
+                    let inode_vec = inode_list.0;
+                    let mut inode_s = Vec::new();
+                    for i in inode_vec.iter() {
+                        inode_s.push(serde_json::to_string(&i).unwrap())
+                    }
+
+                    let content_list = v.1;
+                    let contect_vec = content_list.0;
+                    let mut contect_s = Vec::new();
+                    for i in contect_vec.iter() {
+                        let data = &i.0;
+                        contect_s.push(std::str::from_utf8(data).unwrap().to_string());
+                    }
+
+                    Ok(Response::new(GetAllNodesReply {
+                        file_attr: inode_s,
+                        data_s: contect_s,
+                        errcode: SUCCESS,
+                    }))
+                }
+                None => {
+                    let mut empty_vec: Vec<String> = Vec::new();
+                    Ok(Response::new(GetAllNodesReply {
+                        file_attr: empty_vec.clone(),
+                        data_s: empty_vec,
+                        errcode: 1,
+                    }))
+                }
+            },
+
+            Err(_) => Err(Status::invalid_argument("get_all_nodes failed")),
+        }
+    }
+
+    async fn write_all_nodes(
+        &self,
+        request: tonic::Request<WriteAllNodes>,
+    ) -> Result<tonic::Response<WriteAllNodesReply>, tonic::Status> {
+        let request_inner = request.into_inner();
+        let mut inode_vec: Vec<InodeAttributes> = Vec::new();
+        for file_attr in request_inner.file_attr {
+            let inode_attr = serde_json::from_str::<InodeAttributes>(&file_attr).unwrap();
+            inode_vec.push(inode_attr);
+        }
+        let inode_list = InodeList(inode_vec);
+
+        let mut data_vec: Vec<DataList> = Vec::new();
+        for data in request_inner.data_s {
+            let data_list = DataList((*data.as_bytes()).to_vec());
+            data_vec.push(data_list);
+        }
+        let content_list = ContentList(data_vec);
+
+        let result = self
+            .filesystem
+            .write_all_nodes(inode_list, content_list)
+            .await;
+
+        match result {
+            Ok(value) => Ok(Response::new(WriteAllNodesReply { errcode: SUCCESS })),
+            Err(_) => Err(Status::invalid_argument("write_all_nodes failed")),
         }
     }
 
