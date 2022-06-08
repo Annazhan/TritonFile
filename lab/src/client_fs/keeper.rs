@@ -63,29 +63,6 @@ impl Keeper {
             live_list: Arc::new(Mutex::new(vec![false; bk_addrs.len()])),
         }
     }
-
-    async fn replicate_all_file(&self, inode: u64, from: usize,
-        to: usize,
-        for_addr: usize,
-        live_list: &Vec<bool>) -> TritonFileResult<()> {
-        let fileRequest = FileRequest{
-            uid: 0,
-            gid: 0,
-            pid: 0,
-        };
-
-        let (from_cli, to_cli) = {
-            let backs = self.backs.lock().await;
-            (
-                new_client(&backs[from]).await?,
-                new_client(&backs[to]).await?,
-            )
-        };
-
-        // let fileAttr = from_cli.lookup(&fileRequest, inode, "").await?
-
-        Ok(())
-    }
 }
 
 fn send_signal(chan: &Option<Sender<bool>>, signal: bool) -> TritonFileResult<()> {
@@ -317,10 +294,10 @@ impl Keeper {
     async fn replicate_file(&self,
         from: usize,
         to: usize,
-        for_addr: usize,
-        live_list: &Vec<bool>,)
+        for_addr: usize,)
     -> TritonFileResult<()> {
         info!("{}: replicating {} to {}", self.print_name(), from, to);
+        let len = self.backs.lock().await.len();
         let (from_cli, to_cli) = {
             let backs = self.backs.lock().await;
             (
@@ -328,6 +305,9 @@ impl Keeper {
                 new_client(&backs[to]).await?,
             )
         };
+
+        let (inode_list, content_list) = from_cli.get_all_nodes(for_addr, len).await?.unwrap();
+        to_cli.write_all_nodes(inode_list, content_list).await?;
 
         Ok(())
     }
@@ -371,9 +351,9 @@ impl Keeper {
             .await?;
         self.replicate(primary, new_backup, primary, live_list)
             .await?;
-        self.replicate(old_backup, new_backup, new_backup, live_list)
+        self.replicate_file(old_backup, new_backup, new_backup)
             .await?;
-        self.replicate(primary, new_backup, primary, live_list)
+        self.replicate_file(primary, new_backup, primary)
             .await?;
         // self.replicate(old_backup, new_backup, primary, live_list)
         //     .await?;
@@ -392,9 +372,9 @@ impl Keeper {
             .await?;
         self.replicate(before, after, before, live_list)
             .await?;
-        self.replicate(after, after_after, after, live_list)
+        self.replicate_file(after, after_after, after)
             .await?;
-        self.replicate(before, after, before, live_list)
+        self.replicate_file(before, after, before)
             .await?;
         Ok(())
     }

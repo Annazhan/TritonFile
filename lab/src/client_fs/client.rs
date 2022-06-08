@@ -10,7 +10,10 @@ use fuser::KernelConfig;
 use fuser::TimeOrNow;
 use libc::c_int;
 use tribbler::disfuser;
+use tribbler::disfuser::GetAllNodes;
 use tribbler::disfuser::Init;
+use tribbler::disfuser::WriteAllNodes;
+use tribbler::simple::InodeAttributes;
 use tribbler::storage::ContentList;
 use tribbler::storage::DataList;
 use tribbler::storage::InodeList;
@@ -161,9 +164,20 @@ impl ServerFileSystem for StorageClient {
         len: usize,
     ) -> TritonFileResult<Option<(InodeList, ContentList)>>{
         let mut client = self.disfuser_client().await;
-        let  
+        let inodes_info = client.get_all_nodes(GetAllNodes{
+            for_addr: for_addr as u64,
+            len: len as u64,
+        }).await?.into_inner();
 
-        Ok(())
+        let node_list = inodes_info.file_attr
+        .into_iter()
+        .map(|x| serde_json::from_str::<InodeAttributes>(&x).unwrap()).collect::<Vec<_>>();
+        
+        let content_list = inodes_info.data_s
+        .into_iter()
+        .map(|x| DataList(x.as_bytes().to_vec())).collect::<Vec<_>>();
+        
+        Ok(Some((InodeList(node_list), ContentList(content_list))))
     }
 
     async fn write_all_nodes(
@@ -172,8 +186,20 @@ impl ServerFileSystem for StorageClient {
         content_list: ContentList,
     ) -> TritonFileResult<()>{
         let mut client = self.disfuser_client().await;
-        let 
 
+        let node_list = inode_list.0
+        .into_iter()
+        .map(|x| serde_json::to_string(&x).unwrap()).collect::<Vec<_>>();
+
+        let content_list = content_list.0
+        .into_iter()
+        .map(|x| std::str::from_utf8(&x.0).unwrap().to_string())
+        .collect::<Vec<_>>();
+
+        client.write_all_nodes(WriteAllNodes{
+            file_attr: node_list,
+            data_s: content_list,
+        }).await?;
         Ok(())
     }
     async fn init(&self,
