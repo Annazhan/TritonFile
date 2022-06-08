@@ -54,12 +54,3 @@ impl From<Box<dyn Error>> for TritonFileError {
         TritonFileError::Unknown(x.to_string())
     }
 }
-
-impl From<TritonFileError> for i32 {
-    fn from(error: TritonFileError) -> Self {
-        match error {
-            TritonFileError::UserInterfaceError(x) => x,
-            _ => -1,
-        }
-    }
-}

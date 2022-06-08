@@ -2,6 +2,7 @@ use crate::client_fs::binstore::BinStore;
 use crate::client_fs::front::Front;
 use fuser::Filesystem;
 use log::info;
+use tribbler::config::KeeperConfig;
 use std::net::ToSocketAddrs;
 use std::sync::mpsc::Sender;
 use std::{
@@ -19,6 +20,8 @@ use tribbler::rpc::trib_storage_server::TribStorageServer;
 use tribbler::storage::BinStorage;
 use tribbler::storage::RemoteFileSystem;
 use tribbler::{config::BackConfig, storage::Storage};
+
+use super::keeper;
 
 fn send_signal(chan: &Option<Sender<bool>>, signal: bool) -> TritonFileResult<()> {
     match chan {
@@ -73,6 +76,10 @@ pub async fn serve_back(config: BackConfig) -> TritonFileResult<()> {
 
 pub async fn new_bin_client(backs: Vec<String>) -> TritonFileResult<Box<dyn BinStorage>> {
     Ok(Box::new(BinStore::new(backs)))
+}
+
+pub async fn serve_keeper(kc: KeeperConfig) -> TritonFileResult<()> {
+    keeper::serve_keeper(kc).await
 }
 
 // pub async fn new_front(

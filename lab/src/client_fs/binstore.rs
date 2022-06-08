@@ -498,16 +498,16 @@ impl BinStore {
 impl ServerFileSystem for ReliableStore {
     async fn get_all_nodes(
         &self,
-        for_addr: usize,
-        len: usize,
+        _for_addr: usize,
+        _len: usize,
     ) -> TritonFileResult<Option<(InodeList, ContentList)>>{
         Ok(None)
     }
 
     async fn write_all_nodes(
         &self,
-        inode_list: InodeList,
-        content_list: ContentList,
+        _inode_list: InodeList,
+        _content_list: ContentList,
     ) -> TritonFileResult<()>{
         Ok(())
     }

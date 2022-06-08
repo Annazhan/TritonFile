@@ -53,6 +53,7 @@ impl Keeper {
         ready: Option<Sender<bool>>,
         storage: Box<dyn Storage>,
     ) -> Keeper {
+        let r = send_signal(&ready, true);
         Keeper {
             clock: Arc::new(atomic::AtomicU64::new(1)),
             addrs: Arc::new(Mutex::new(kp_addrs.clone())),
@@ -235,6 +236,7 @@ impl Keeper {
         // This should return in at most 1+e seconds.
         for i in 0..new_live_list.len() {
             if new_live_list[i] != old_live_list[i] {
+                info!("new live list is not equal to old live list");
                 self.manage_replicate(&new_live_list, old_live_list).await?;
                 // let _ = self.set_replicate_state(&Vec::new());
                 break;

@@ -53,9 +53,9 @@ impl StorageClient {
         })
     }
 
-    pub async fn client(&self) -> TribStorageClient<Channel> {
-        TribStorageClient::new(self.channel.lock().await.clone())
-    }
+    // pub async fn client(&self) -> TribStorageClient<Channel> {
+    //     TribStorageClient::new(self.channel.lock().await.clone())
+    // }
 
     pub async fn disfuser_client(&self) -> DisfuserClient<Channel> {
         DisfuserClient::new(self.channel.lock().await.clone())
@@ -939,10 +939,10 @@ impl ServerFileSystem for StorageClient {
 #[async_trait]
 impl KeyString for StorageClient {
     async fn get(&self, key: &str) -> TritonFileResult<Option<String>> {
-        let mut client = self.client().await;
+        let mut client = self.disfuser_client().await;
 
         let result = client
-            .get(rpc::Key {
+            .get(disfuser::Key {
                 key: key.to_string(),
             })
             .await;
@@ -959,9 +959,9 @@ impl KeyString for StorageClient {
     }
 
     async fn set(&self, kv: &storage::KeyValue) -> TritonFileResult<bool> {
-        let mut client = self.client().await;
+        let mut client = self.disfuser_client().await;
         let result = client
-            .set(rpc::KeyValue {
+            .set(disfuser::KeyValue {
                 key: kv.key.clone(),
                 value: kv.value.clone(),
             })
@@ -969,9 +969,9 @@ impl KeyString for StorageClient {
         Ok(result.into_inner().value)
     }
     async fn keys(&self, p: &storage::Pattern) -> TritonFileResult<storage::List> {
-        let mut client = self.client().await;
+        let mut client = self.disfuser_client().await;
         let result = client
-            .keys(rpc::Pattern {
+            .keys(disfuser::Pattern {
                 prefix: p.prefix.clone(),
                 suffix: p.suffix.clone(),
             })
@@ -983,9 +983,9 @@ impl KeyString for StorageClient {
 #[async_trait]
 impl KeyList for StorageClient {
     async fn list_get(&self, key: &str) -> TritonFileResult<storage::List> {
-        let mut client = self.client().await;
+        let mut client = self.disfuser_client().await;
         let result = client
-            .list_get(rpc::Key {
+            .list_get(disfuser::Key {
                 key: key.to_string(),
             })
             .await?;
@@ -993,9 +993,9 @@ impl KeyList for StorageClient {
     }
 
     async fn list_keys(&self, p: &storage::Pattern) -> TritonFileResult<storage::List> {
-        let mut client = self.client().await;
+        let mut client = self.disfuser_client().await;
         let result = client
-            .list_keys(rpc::Pattern {
+            .list_keys(disfuser::Pattern {
                 prefix: p.prefix.to_string(),
                 suffix: p.suffix.to_string(),
             })
@@ -1004,9 +1004,9 @@ impl KeyList for StorageClient {
     }
 
     async fn list_append(&self, kv: &storage::KeyValue) -> TritonFileResult<bool> {
-        let mut client = self.client().await;
+        let mut client = self.disfuser_client().await;
         let result = client
-            .list_append(rpc::KeyValue {
+            .list_append(disfuser::KeyValue {
                 key: kv.key.clone(),
                 value: kv.value.clone(),
             })
@@ -1015,9 +1015,9 @@ impl KeyList for StorageClient {
     }
 
     async fn list_remove(&self, kv: &storage::KeyValue) -> TritonFileResult<u32> {
-        let mut client = self.client().await;
+        let mut client = self.disfuser_client().await;
         let result = client
-            .list_remove(rpc::KeyValue {
+            .list_remove(disfuser::KeyValue {
                 key: kv.key.clone(),
                 value: kv.value.clone(),
             })

@@ -91,9 +91,9 @@ async fn run_srv(t: ProcessType, idx: usize, config: Arc<Config>, tx: Option<Sen
             lab::serve_back(cfg).await;
         }
         ProcessType::Keep => {
-            // let cfg = config.keeper_config(idx, tx, None).unwrap();
-            // info!("starting keeper on {}", cfg.addr());
-            // lab::serve_keeper(cfg).await;
+            let cfg = config.keeper_config(idx, tx, None).unwrap();
+            info!("starting keeper on {}", cfg.addr());
+            lab::serve_keeper(cfg).await;
         }
     };
 }
