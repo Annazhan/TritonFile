@@ -868,11 +868,7 @@ impl ServerFileSystem for StorageClient {
                 return  Ok((Some((ino_, offset_, filetype_, datalist_)), SUCCESS))
             }
             None => return Ok((None, SUCCESS))
-        }
-
-        // string-> datalist 
-        // datalist.0 -> name: vec[u8]
-        // OsStr::from_bytes(name),        
+        }    
     }
 
     async fn releasedir(

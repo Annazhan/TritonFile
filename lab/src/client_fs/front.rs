@@ -23,21 +23,24 @@ use tribbler::storage;
 const BLOCK_SIZE: u64 = 512;
 const MAX_NAME_LENGTH: u32 = 255;
 const MAX_FILE_SIZE: u64 = 1024 * 1024 * 1024 * 1024;
+pub const USERNAME: &str = "Tan-cha";
 
 pub struct Front {
     binstore: Box<dyn storage::BinStorage>,
     clock: atomic::AtomicU64,
     runtime: tokio::runtime::Runtime,
+    username: String, 
 }
 
 impl Front {
-    pub fn new(binstore: Box<dyn storage::BinStorage>, runtime: tokio::runtime::Runtime) -> Front {
+    pub fn new(binstore: Box<dyn storage::BinStorage>, runtime: tokio::runtime::Runtime, username: String) -> Front {
         #[cfg(feature = "abi-7-26")]
         {
             Front {
                 binstore,
                 clock: atomic::AtomicU64::new(1),
                 runtime,
+                username, 
             }
         }
         #[cfg(not(feature = "abi-7-26"))]
@@ -46,6 +49,7 @@ impl Front {
                 binstore,
                 clock: atomic::AtomicU64::new(1),
                 runtime,
+                username, 
             }
         }
     }
@@ -87,7 +91,7 @@ impl Filesystem for Front {
         
         // ReliableStore
         let gid = _req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
@@ -120,7 +124,7 @@ impl Filesystem for Front {
         info!("front  front Look up function");
         // ReliableStore
         let gid = req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
@@ -167,7 +171,7 @@ impl Filesystem for Front {
         info!("front  front read function {}", inode);
         // ReliableStore
         let gid = _req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
@@ -218,8 +222,7 @@ impl Filesystem for Front {
             gid: _req.gid(),
             pid: _req.pid(),
         };
-        let gid = _req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
@@ -269,8 +272,7 @@ impl Filesystem for Front {
             gid: req.gid(),
             pid: req.pid(),
         };
-        let gid = req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
@@ -307,8 +309,7 @@ impl Filesystem for Front {
             gid: _req.gid(),
             pid: _req.pid(),
         };
-        let gid = _req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
@@ -339,8 +340,7 @@ impl Filesystem for Front {
             gid: _req.gid(),
             pid: _req.pid(),
         };
-        let gid = _req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
@@ -373,8 +373,7 @@ impl Filesystem for Front {
             gid: req.gid(),
             pid: req.pid(),
         };
-        let gid = req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
@@ -416,8 +415,8 @@ impl Filesystem for Front {
             gid: _req.gid(),
             pid: _req.pid(),
         };
-        let gid = _req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
@@ -473,7 +472,7 @@ impl Filesystem for Front {
             pid: request.pid(),
         };
         let gid = request.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
@@ -512,7 +511,7 @@ impl Filesystem for Front {
             pid: request.pid(),
         };
         let gid = request.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
@@ -551,7 +550,7 @@ impl Filesystem for Front {
             pid: _req.pid(),
         };
         let gid = _req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
@@ -590,7 +589,7 @@ impl Filesystem for Front {
             pid: req.pid(),
         };
         let gid = req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
         
         info!("front  access: get bin_res");
@@ -638,7 +637,7 @@ impl Filesystem for Front {
             pid: req.pid(),
         };
         let gid = req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
@@ -725,7 +724,7 @@ impl Filesystem for Front {
         };
 
         let gid = _req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
         
         info!("front opendir: get bin_res");
@@ -773,7 +772,7 @@ impl Filesystem for Front {
         };
 
         let gid = _req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
         
         info!("front readdir: get bin_res");
@@ -829,7 +828,7 @@ impl Filesystem for Front {
             pid: _req.pid(),
         };
         let gid = _req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {
@@ -876,7 +875,7 @@ impl Filesystem for Front {
             pid: req.pid(),
         };
         let gid = req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(gid.as_str());
+        let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
 
         match bin_res {

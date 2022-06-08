@@ -2,6 +2,7 @@ use bincode::options;
 use clap::{crate_version, Arg, Command};
 use front::client_fs::lab::{new_bin_client, serve_back};
 use front::client_fs::{client::new_client, front::Front};
+use front::client_fs::front::USERNAME;
 use fuser::{
     Filesystem, KernelConfig, MountOption, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory,
     ReplyEmpty, ReplyEntry, ReplyOpen, ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow,
@@ -329,7 +330,8 @@ async fn test_server_setup() -> TritonFileResult<()> {
     .unwrap();
     let front =  Front::new(
         bin_client,
-        runtime
+        runtime,
+        USERNAME.to_string(),
     );
     let result = fuser::mount2(
         front, 

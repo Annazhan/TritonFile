@@ -3,6 +3,7 @@ use std::io::{BufRead, BufReader, ErrorKind};
 use actix_files::Files;
 use actix_web::{web, App, HttpServer};
 use clap::Parser;
+use front::client_fs;
 use front::client_fs::lab::{new_bin_client, serve_back};
 use front::client_fs::{client::new_client, front::Front};
 use log::{info, warn, LevelFilter, error};
@@ -17,6 +18,7 @@ use fuser::{
     ReplyEmpty, ReplyEntry, ReplyOpen, ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow,
     FUSE_ROOT_ID,
 };
+use client_fs::front::USERNAME;
 
 #[derive(Debug, Clone)]
 enum ServerType {
@@ -94,7 +96,8 @@ fn main() -> TritonFileResult<()> {
     // let handle = Handle::current();
     let front =  Front::new(
         bin_client,
-        runtime
+        runtime,
+        USERNAME.to_string(),
     );
 
     info!("The file system is ready to be mounted");

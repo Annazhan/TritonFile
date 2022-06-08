@@ -308,6 +308,7 @@ impl SimpleFS {
     }
 
     pub fn allocate_next_file_handle(&self, read: bool, write: bool) -> u64 {
+        info!("allocate_next_inode, next fh {:#?}", self.next_file_handle);
         let mut fh = self.next_file_handle.fetch_add(1, Ordering::SeqCst);
         // Assert that we haven't run out of file handles
         assert!(fh < FILE_HANDLE_WRITE_BIT && fh < FILE_HANDLE_READ_BIT);

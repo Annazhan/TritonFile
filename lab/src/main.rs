@@ -2,6 +2,8 @@
 
 use clap::{crate_version, Arg, Command};
 use front::client_fs::lab::new_bin_client;
+use front::client_fs::front::USERNAME;
+
 use fuser::consts::FOPEN_DIRECT_IO;
 #[cfg(feature = "abi-7-26")]
 use fuser::consts::FUSE_HANDLE_KILLPRIV;
@@ -145,7 +147,8 @@ let mountpoint: String = matches
 let result = fuser::mount2(
     Front::new(
         bin_client, 
-        runtime
+        runtime,
+        USERNAME.to_string(),
     ),
     mountpoint,
     &options,

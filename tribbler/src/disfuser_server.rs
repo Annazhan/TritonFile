@@ -375,6 +375,7 @@ impl Disfuser for DisfuserServer {
         &self,
         request: tonic::Request<Create>,
     ) -> Result<tonic::Response<CreateReply>, tonic::Status> {
+        info!("disfuser server: create is called");
         let request_inner = request.into_inner();
         let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,
@@ -1012,6 +1013,7 @@ impl Disfuser for DisfuserServer {
         &self,
         request: tonic::Request<MkDir>,
     ) -> Result<tonic::Response<MkDirReply>, tonic::Status> {
+        info!("disfuser server: mkdir is called");
         let request_inner = request.into_inner();
         let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,

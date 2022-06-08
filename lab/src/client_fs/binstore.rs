@@ -450,6 +450,12 @@ impl BinStore {
     }
 }
 
+pub fn hash_name_to_idx(name: &str, len: usize) -> usize {
+    let mut hasher = DefaultHasher::new();
+    name.hash(&mut hasher);
+    hasher.finish() as usize % len
+}
+
 #[async_trait]
 impl storage::BinStorage for BinStore {
     async fn bin(&self, name: &str) -> TritonFileResult<Box<dyn Storage>> {
@@ -578,7 +584,8 @@ impl ServerFileSystem for ReliableStore {
             {
                 Err(_) => {
                     info!("binstorage prime write fail");
-                    continue},
+                    continue
+                },
                 Ok(_) => (),
             }
 
@@ -692,7 +699,12 @@ impl ServerFileSystem for ReliableStore {
     ) -> TritonFileResult<(Option<(u64, u32)>, c_int)> {
         loop {
             let primary = self.primary_store().await?;
+            let backup = self.backup_store().await?;
             match primary.open(_req, _ino, _flags).await {
+                Err(_) => continue,
+                Ok(_) => (),
+            }
+            match backup.open(_req, _ino, _flags).await {
                 Err(_) => continue,
                 Ok(res) => return Ok(res),
             }
@@ -879,7 +891,12 @@ impl ServerFileSystem for ReliableStore {
     ) -> TritonFileResult<(Option<(u64, u32)>, c_int)>{
         loop {
             let primary = self.primary_store().await?;
+            let backup = self.backup_store().await?;
             match primary.opendir(req, inode, flags).await {
+                Err(_) => continue,
+                Ok(res) => (),
+            }
+            match backup.opendir(req, inode, flags).await {
                 Err(_) => continue,
                 Ok(res) => return Ok(res),
             }
