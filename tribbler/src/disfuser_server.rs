@@ -31,12 +31,13 @@ type listxattrStream = Pin<Box<dyn Stream<Item = Result<ListxattrReply, Status>>
 pub const slice_size: usize = 128;
 use crate::disfuser::{Clock, Key, KeyValue, StringList, Value};
 use crate::storage;
-
+#[allow(dead_code)]
 pub struct DisfuserServer {
     pub filesystem: Box<dyn Storage>,
     // pub clock: RwLock<i64>,
 }
 
+#[allow(dead_code)]
 fn reply_response_iter(msg: String, errcode: i32) -> Vec<Reply> {
     let data_len = msg.len();
 
@@ -46,8 +47,8 @@ fn reply_response_iter(msg: String, errcode: i32) -> Vec<Reply> {
     }
 
     let mut vec: Vec<Reply> = Vec::new();
-    let mut start = 0;
-    let mut end = 0;
+    let mut start;
+    let mut end;
 
     for i in 0..n {
         start = i * slice_size;
@@ -60,7 +61,7 @@ fn reply_response_iter(msg: String, errcode: i32) -> Vec<Reply> {
     }
     return vec;
 }
-
+#[allow(dead_code)]
 fn getxattr_response_iter(msg: String, size: u32, errcode: i32) -> Vec<GetxattrReply> {
     let data_len = msg.len();
     let mut n = data_len / slice_size;
@@ -69,8 +70,8 @@ fn getxattr_response_iter(msg: String, size: u32, errcode: i32) -> Vec<GetxattrR
     }
 
     let mut vec: Vec<GetxattrReply> = Vec::new();
-    let mut start = 0;
-    let mut end = 0;
+    let mut start;
+    let mut end;
 
     for i in 0..n {
         start = i * slice_size;
@@ -84,7 +85,7 @@ fn getxattr_response_iter(msg: String, size: u32, errcode: i32) -> Vec<GetxattrR
     }
     return vec;
 }
-
+#[allow(dead_code)]
 fn listxattr_response_iter(msg: String, size: u32, errcode: i32) -> Vec<ListxattrReply> {
     let data_len = msg.len();
     let mut n = data_len / slice_size;
@@ -93,8 +94,8 @@ fn listxattr_response_iter(msg: String, size: u32, errcode: i32) -> Vec<Listxatt
     }
 
     let mut vec: Vec<ListxattrReply> = Vec::new();
-    let mut start = 0;
-    let mut end = 0;
+    let mut start;
+    let mut end;
 
     for i in 0..n {
         start = i * slice_size;
@@ -108,7 +109,7 @@ fn listxattr_response_iter(msg: String, size: u32, errcode: i32) -> Vec<Listxatt
     }
     return vec;
 }
-
+#[allow(dead_code)]
 fn system_time_from_time(secs: i64, nsecs: u32) -> SystemTime {
     if secs >= 0 {
         UNIX_EPOCH + Duration::new(secs as u64, nsecs)
@@ -116,7 +117,7 @@ fn system_time_from_time(secs: i64, nsecs: u32) -> SystemTime {
         UNIX_EPOCH - Duration::new((-secs) as u64, nsecs)
     }
 }
-
+#[allow(dead_code)]
 impl DisfuserServer {
     pub fn new(storage: Box<dyn storage::Storage>) -> DisfuserServer {
         DisfuserServer {
@@ -126,6 +127,7 @@ impl DisfuserServer {
 }
 
 #[async_trait]
+#[allow(dead_code)]
 impl Disfuser for DisfuserServer {
     type readStream = readStream;
     type getxattrStream = getxattrStream;
@@ -136,7 +138,7 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<Init>,
     ) -> Result<tonic::Response<InitReply>, tonic::Status> {
         let request_inner = request.into_inner();
-        let mut file_request = FileRequest {
+        let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,
             gid: request_inner.frequest.clone().gid,
             pid: request_inner.frequest.clone().pid,
@@ -296,8 +298,8 @@ impl Disfuser for DisfuserServer {
         &self,
         request: tonic::Request<Write>,
     ) -> Result<tonic::Response<WriteReply>, tonic::Status> {
-        let mut request_inner = request.into_inner();
-        let mut file_request = FileRequest {
+        let request_inner = request.into_inner();
+        let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,
             gid: request_inner.frequest.clone().gid,
             pid: request_inner.frequest.clone().pid,
@@ -338,8 +340,8 @@ impl Disfuser for DisfuserServer {
         &self,
         request: tonic::Request<LookUp>,
     ) -> Result<tonic::Response<Reply>, tonic::Status> {
-        let mut request_inner = request.into_inner();
-        let mut file_request = FileRequest {
+        let request_inner = request.into_inner();
+        let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,
             gid: request_inner.frequest.clone().gid,
             pid: request_inner.frequest.clone().pid,
@@ -374,7 +376,7 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<Create>,
     ) -> Result<tonic::Response<CreateReply>, tonic::Status> {
         let request_inner = request.into_inner();
-        let mut file_request = FileRequest {
+        let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,
             gid: request_inner.frequest.clone().gid,
             pid: request_inner.frequest.clone().pid,
@@ -417,7 +419,7 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<Unlink>,
     ) -> Result<tonic::Response<UnlinkReply>, tonic::Status> {
         let request_inner = request.into_inner();
-        let mut file_request = FileRequest {
+        let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,
             gid: request_inner.frequest.clone().gid,
             pid: request_inner.frequest.clone().pid,
@@ -440,7 +442,7 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<Getattr>,
     ) -> Result<tonic::Response<GetattrReply>, tonic::Status> {
         let request_inner = request.into_inner();
-        let mut file_request = FileRequest {
+        let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,
             gid: request_inner.frequest.clone().gid,
             pid: request_inner.frequest.clone().pid,
@@ -474,7 +476,7 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<Open>,
     ) -> Result<tonic::Response<OpenReply>, tonic::Status> {
         let request_inner = request.into_inner();
-        let mut file_request = FileRequest {
+        let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,
             gid: request_inner.frequest.clone().gid,
             pid: request_inner.frequest.clone().pid,
@@ -508,7 +510,7 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<Release>,
     ) -> Result<tonic::Response<ReleaseReply>, tonic::Status> {
         let request_inner = request.into_inner();
-        let mut file_request = FileRequest {
+        let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,
             gid: request_inner.frequest.clone().gid,
             pid: request_inner.frequest.clone().pid,
@@ -716,7 +718,7 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<Access>,
     ) -> Result<tonic::Response<AccessReply>, tonic::Status> {
         let request_inner = request.into_inner();
-        let mut file_request = FileRequest {
+        let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,
             gid: request_inner.frequest.clone().gid,
             pid: request_inner.frequest.clone().pid,
@@ -738,7 +740,7 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<Rename>,
     ) -> Result<tonic::Response<RenameReply>, tonic::Status> {
         let request_inner = request.into_inner();
-        let mut file_request = FileRequest {
+        let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,
             gid: request_inner.frequest.clone().gid,
             pid: request_inner.frequest.clone().pid,
@@ -774,7 +776,7 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<Setattr>,
     ) -> Result<tonic::Response<SetattrReply>, tonic::Status> {
         let request_inner = request.into_inner();
-        let mut file_request = FileRequest {
+        let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,
             gid: request_inner.frequest.clone().gid,
             pid: request_inner.frequest.clone().pid,
@@ -842,7 +844,7 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<ReadDir>,
     ) -> Result<tonic::Response<ReadDirReply>, tonic::Status> {
         let request_inner = request.into_inner();
-        let mut file_request = FileRequest {
+        let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,
             gid: request_inner.frequest.clone().gid,
             pid: request_inner.frequest.clone().pid,
@@ -926,7 +928,7 @@ impl Disfuser for DisfuserServer {
                     }))
                 }
                 None => {
-                    let mut empty_vec: Vec<String> = Vec::new();
+                    let empty_vec: Vec<String> = Vec::new();
                     Ok(Response::new(GetAllNodesReply {
                         file_attr: empty_vec.clone(),
                         data_s: empty_vec,
@@ -964,7 +966,7 @@ impl Disfuser for DisfuserServer {
             .await;
 
         match result {
-            Ok(value) => Ok(Response::new(WriteAllNodesReply { errcode: SUCCESS })),
+            Ok(_value) => Ok(Response::new(WriteAllNodesReply { errcode: SUCCESS })),
             Err(_) => Err(Status::invalid_argument("write_all_nodes failed")),
         }
     }
@@ -974,7 +976,7 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<OpenDir>,
     ) -> Result<tonic::Response<OpenDirReply>, tonic::Status> {
         let request_inner = request.into_inner();
-        let mut file_request = FileRequest {
+        let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,
             gid: request_inner.frequest.clone().gid,
             pid: request_inner.frequest.clone().pid,
@@ -1011,7 +1013,7 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<MkDir>,
     ) -> Result<tonic::Response<MkDirReply>, tonic::Status> {
         let request_inner = request.into_inner();
-        let mut file_request = FileRequest {
+        let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,
             gid: request_inner.frequest.clone().gid,
             pid: request_inner.frequest.clone().pid,
@@ -1056,7 +1058,7 @@ impl Disfuser for DisfuserServer {
         request: tonic::Request<ReleaseDir>,
     ) -> Result<tonic::Response<ReleaseDirReply>, tonic::Status> {
         let request_inner = request.into_inner();
-        let mut file_request = FileRequest {
+        let file_request = FileRequest {
             uid: request_inner.frequest.clone().uid,
             gid: request_inner.frequest.clone().gid,
             pid: request_inner.frequest.clone().pid,
