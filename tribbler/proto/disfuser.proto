@@ -290,6 +290,27 @@ message KeyValue {
     required int32 errcode = 1;
   }
 
+  message GetAllNodes{
+    required uint64 for_addr = 1;
+    required uint64 len = 2;
+  }
+
+  message GetAllNodesReply{
+    repeated string fileAttr = 1;
+    repeated string dataS = 2;
+    required int32 errcode = 3;
+  }
+
+  message WriteAllNodes{
+    repeated string fileAttr = 1;
+    repeated string dataS = 2;
+  }
+
+  message WriteAllNodesReply {
+  required int32 errcode = 1;
+  }
+  
+
 service disfuser {
     rpc init(Init) returns (initReply) {} 
     rpc read(Read) returns (stream Reply) {}
@@ -310,6 +331,9 @@ service disfuser {
     rpc opendir(OpenDir) returns (OpenDirReply) {}
     rpc mkdir(MkDir) returns (MkDirReply) {}
     rpc releasedir(ReleaseDir) returns (ReleaseDirReply) {}
+
+    rpc getAllNodes (GetAllNodes) returns (GetAllNodesReply) {}
+    rpc writeAllNodes (WriteAllNodes) returns (WriteAllNodesReply) {}
 
     rpc get(Key) returns (Value);
     rpc set(KeyValue) returns (Bool);
