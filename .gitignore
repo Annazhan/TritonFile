@@ -5,3 +5,6 @@ lab/src/test2.rs
 cmd/bins.json
 cmd/Cargo.toml
 tmp
+tribbler/Cargo.toml
+Cargo.lock
+lab/Cargo.toml

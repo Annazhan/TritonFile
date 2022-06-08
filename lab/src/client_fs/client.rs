@@ -11,7 +11,9 @@ use fuser::TimeOrNow;
 use libc::c_int;
 use tribbler::disfuser;
 use tribbler::disfuser::Init;
+use tribbler::storage::ContentList;
 use tribbler::storage::DataList;
+use tribbler::storage::InodeList;
 use std::time::SystemTime;
 use tokio::sync::Mutex;
 use tokio_stream::Stream;
@@ -55,12 +57,6 @@ impl StorageClient {
     pub async fn disfuser_client(&self) -> DisfuserClient<Channel> {
         DisfuserClient::new(self.channel.lock().await.clone())
     }
-
-    pub async fn get_indoes() -> TritonFileResult<Option<>> {
-        Ok(())
-    }
-
-    pub async fn write_inodes() ->
 }
 
 // convert the write into a write stream
@@ -159,6 +155,27 @@ fn setxattr_requests_iter(
 
 #[async_trait]
 impl ServerFileSystem for StorageClient {
+    async fn get_all_nodes(
+        &self,
+        for_addr: usize,
+        len: usize,
+    ) -> TritonFileResult<Option<(InodeList, ContentList)>>{
+        let mut client = self.disfuser_client().await;
+        let  
+
+        Ok(())
+    }
+
+    async fn write_all_nodes(
+        &self,
+        inode_list: InodeList,
+        content_list: ContentList,
+    ) -> TritonFileResult<()>{
+        let mut client = self.disfuser_client().await;
+        let 
+
+        Ok(())
+    }
     async fn init(&self,
         _req: &FileRequest) -> TritonFileResult<c_int>{
         let mut client = self.disfuser_client().await;

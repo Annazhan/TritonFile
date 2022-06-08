@@ -6,6 +6,9 @@ use libc::c_int;
 use log::info;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use tribbler::storage::ContentList;
+use tribbler::storage::InodeList;
+use tribbler::storage::hash_name_to_idx;
 use std::cmp;
 use std::collections::hash_map::DefaultHasher;
 use std::ffi::OsStr;
@@ -488,6 +491,21 @@ impl BinStore {
 
 #[async_trait]
 impl ServerFileSystem for ReliableStore {
+    async fn get_all_nodes(
+        &self,
+        for_addr: usize,
+        len: usize,
+    ) -> TritonFileResult<Option<(InodeList, ContentList)>>{
+        Ok(None)
+    }
+
+    async fn write_all_nodes(
+        &self,
+        inode_list: InodeList,
+        content_list: ContentList,
+    ) -> TritonFileResult<()>{
+        Ok(())
+    }
     async fn init(&self, _req: &FileRequest) -> TritonFileResult<c_int>{
         loop {
             let primary = self.primary_store().await?;

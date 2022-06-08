@@ -539,6 +539,16 @@ impl ServerFileSystem for RemoteFileSystem {
                 xattrs: new_bTree,
                 ..*node_attr
             };
+            fs.write_inode(&new_node_attr);
+            let contents = content_list.get(i).unwrap();
+            let content_path = fs.content_path(inode);
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&content_path)
+                .unwrap();
+            file.write(&contents.0[..])?;
         }
         Ok(())
     }
