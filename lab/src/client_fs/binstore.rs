@@ -99,7 +99,7 @@ impl ReliableStore {
         // start from the index and find the first alive one
         let mut idx = 0;
         let mut count = count;
-        info!("{} addrs len: {}", count, self.addrs.len());
+        // info!("{} addrs len: {}", count, self.addrs.len());
         let mut limit = self.addrs.len() * 2;
         loop {
             limit -= 1;
@@ -682,7 +682,7 @@ impl ServerFileSystem for ReliableStore {
         ino: u64,
     ) -> TritonFileResult<(Option<FileAttr>, c_int)> {
         loop {
-            info!("bin storage getattr");
+            // info!("bin storage getattr");
             let primary = self.primary_store().await?;
             match primary.getattr(_req, ino).await {
                 Err(_) => continue,

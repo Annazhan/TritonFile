@@ -295,8 +295,6 @@ impl ServerFileSystem for StorageClient {
             // _lock_owner,
         // );
 
-
-        info!("client write rpc before");
         // let result = client.write(in_stream).await?;
         let res = client.write(Write {
             frequest: freq,
@@ -311,8 +309,6 @@ impl ServerFileSystem for StorageClient {
         let result = match res{
             Ok(value) =>value,
             Err(e) => {
-                info!("{}",e);
-                info!("client wirte fail");
                 return Ok((None, libc::ENETDOWN));
             }
         };
@@ -860,10 +856,10 @@ impl ServerFileSystem for StorageClient {
                 let offset_ = offset.unwrap();
                 let filetype_str = filetype.unwrap();
                 let name_str = name.unwrap();
-                let name_ptr = name_str.as_bytes();
+                let name_ptr: Vec<u8> = serde_json::from_str(&name_str)?;
 
                 let filetype_ = serde_json::from_str::<FileType>(&filetype_str).unwrap();
-                let datalist_ = storage::DataList(name_ptr.to_vec());
+                let datalist_ = storage::DataList(name_ptr);
 
                 return  Ok((Some((ino_, offset_, filetype_, datalist_)), SUCCESS))
             }

@@ -441,6 +441,7 @@ impl SimpleFS {
         if let Some((inode, _)) = entries.get(name.as_bytes()) {
             return self.get_inode(*inode);
         } else {
+            info!("backend lookup_name called error with name {:?}", name);
             return Err(libc::ENOENT);
         }
     }

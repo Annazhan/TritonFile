@@ -354,7 +354,7 @@ impl RemoteFileSystem {
             fs::create_dir_all(format!("tmp/{}", num)).unwrap();
         }
 
-        let fs = SimpleFS::new(format!("tmp/{}", num), false, false);
+        let fs = SimpleFS::new(format!("tmp/{}", num), false, true);
 
         if !fs::metadata(Path::new(&fs.data_dir).join("inodes")).is_ok() {
             info!("try to create metadata file: inode_dir");
@@ -612,6 +612,7 @@ impl ServerFileSystem for RemoteFileSystem {
 
             let mut buffer = vec![0; read_size as usize];
             file.read_exact_at(&mut buffer, offset as u64).unwrap();
+            info!("back end read buffer {:?}", buffer);
             return Ok((
                 Some(serde_json::to_string(&buffer).unwrap()),
                 error::SUCCESS,
@@ -1483,7 +1484,7 @@ impl ServerFileSystem for RemoteFileSystem {
 
         for (index, entry) in entries.iter().skip(offset as usize).enumerate() {
             let (name, (inode, file_type)) = entry;
-
+            info!("The name in readdir is {:?}", name);
             return Ok((
                 Some((
                     *inode,

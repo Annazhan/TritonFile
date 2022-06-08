@@ -10,6 +10,7 @@ use log::{info, warn};
 #[cfg(feature = "abi-7-26")]
 use log::info;
 use std::ffi::OsStr;
+use std::path::Path;
 #[cfg(target_os = "linux")]
 use std::sync::atomic::{AtomicU64, Ordering};
 use tribbler::storage::FileRequest;
@@ -121,7 +122,7 @@ impl Filesystem for Front {
     }
 
     fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
-        info!("front  front Look up function");
+        info!("front Look up called with name {:?} and parent indoe {:?}", name, parent);
         // ReliableStore
         let gid = req.gid().to_string().clone();
         let bin_pre = self.binstore.bin(self.username.as_str());
@@ -142,8 +143,10 @@ impl Filesystem for Front {
                 match res {
                     Ok((attrs_op, error_code)) => {
                         if error_code != SUCCESS {
+                            info!("front lookup function failed error_code {}", error_code);
                             reply.error(error_code);
                         } else {
+                            info!("front lookup function success and fileAttr is {:?}", attrs_op.unwrap());
                             let attrs = attrs_op.unwrap();
                             reply.entry(&Duration::new(0, 0), &attrs, 0);
                         }
@@ -192,7 +195,9 @@ impl Filesystem for Front {
                         } else {
                             let string_data = string_data_op.unwrap();
                             let str_data: &str = &string_data;
-                            let data: Vec<u8> = str_data.as_bytes().to_vec();
+                            let data: Vec<u8> = serde_json::from_str(str_data).unwrap();
+                            // str_data.as_bytes().to_vec();
+                            info!("read data is {:?}", data);
                             reply.data(&data)
                         }
                     }
@@ -243,6 +248,7 @@ impl Filesystem for Front {
                 match res {
                     Ok((written_op, error_code)) => {
                         if error_code != SUCCESS {
+                            info!("write error {:?}", error_code);
                             reply.error(error_code)
                         } else {
                             let written = written_op.unwrap();
@@ -266,7 +272,7 @@ impl Filesystem for Front {
         flags: i32,
         reply: ReplyCreate,
     ) {
-        info!("front create function {}", parent);
+        info!("front create() called with {:?} {:?}", parent, name);
         let freq = &FileRequest {
             uid: req.uid(),
             gid: req.gid(),
@@ -277,7 +283,6 @@ impl Filesystem for Front {
 
         match bin_res {
             Ok(bin) => {
-                info!{"front create"};
                 let bin_create_pre = bin.create(freq, parent, name, mode, _umask, flags);
 
                 let res = self.runtime.block_on(bin_create_pre);
@@ -334,7 +339,7 @@ impl Filesystem for Front {
     }
 
     fn getattr(&mut self, _req: &Request, inode: u64, reply: ReplyAttr) {
-        info!("front  get attr function {}", inode);
+        // info!("front  get attr function {}", inode);
         let freq = &FileRequest {
             uid: _req.uid(),
             gid: _req.gid(),
@@ -353,9 +358,11 @@ impl Filesystem for Front {
                     Ok(res_info) => {
                         let (attrs_op, error_code) = res_info;
                         if error_code != SUCCESS {
+                            info!("getattr called error");
                             reply.error(error_code);
                         } else {
                             let attrs = attrs_op.unwrap();
+                            info!("getattr called success with file attrs {:?}", attrs);
                             reply.attr(&Duration::new(0, 0), &attrs);
                         }
                     }
@@ -504,7 +511,7 @@ impl Filesystem for Front {
         size: u32,
         reply: ReplyXattr,
     ) {
-        info!("front  get x attr {}", inode);
+        // info!("front  get x attr {}", inode);
         let freq = &FileRequest {
             uid: request.uid(),
             gid: request.gid(),
@@ -582,7 +589,7 @@ impl Filesystem for Front {
     }
 
     fn access(&mut self, req: &Request, inode: u64, mask: i32, reply: ReplyEmpty) {
-        info!("front  access {}", inode);
+        // info!("front  access {}", inode);
         let freq = &FileRequest {
             uid: req.uid(),
             gid: req.gid(),
@@ -592,7 +599,7 @@ impl Filesystem for Front {
         let bin_pre = self.binstore.bin(self.username.as_str());
         let bin_res = self.runtime.block_on(bin_pre);
         
-        info!("front  access: get bin_res");
+        // info!("front  access: get bin_res");
         match bin_res {
             Ok(bin) => {
                 let bin_access_pre = bin.access(freq, inode, mask);
@@ -602,8 +609,10 @@ impl Filesystem for Front {
                 match res {
                     Ok(error_code) => {
                         if error_code != SUCCESS {
+                            info!("check access error");
                             reply.error(error_code)
                         } else {
+                            info!("check access ok");
                             reply.ok();
                         }
                     }
@@ -772,45 +781,61 @@ impl Filesystem for Front {
         };
 
         let gid = _req.gid().to_string().clone();
-        let bin_pre = self.binstore.bin(self.username.as_str());
-        let bin_res = self.runtime.block_on(bin_pre);
         
-        info!("front readdir: get bin_res");
+        let mut offset = offset.clone();
 
-        match bin_res {
-            Ok(bin) => {
-                let bin_readdir_pre = bin.readdir(freq, inode, _fh, offset);
-                let res = self.runtime.block_on(bin_readdir_pre);
-                match res {
-                    Ok((res_op, error_code)) => {
-                        if error_code != SUCCESS {
-                            reply.error(error_code);
-                        } else {
-                            match res_op{
-                                Some((inode, offset, filetype, datalist)) =>{
-                                    let name_vec = datalist.0; 
-                                    let _ = reply.add(
-                                        inode, 
-                                        offset,
-                                        filetype,
-                                        OsStr::from_bytes(&name_vec),
-                                    );           
-                                }, 
-                                None => reply.ok()
+        loop{
+            let bin_pre = self.binstore.bin(self.username.as_str());
+            let bin_res = self.runtime.block_on(bin_pre);
+            match bin_res {
+                Ok(bin) => {
+                    let bin_readdir_pre = bin.readdir(freq, inode, _fh, offset);
+                    offset = offset + 1;
+                    let res = self.runtime.block_on(bin_readdir_pre);
+                    match res {
+                        Ok((res_op, error_code)) => {
+                            if error_code != SUCCESS {
+                                reply.error(error_code);
+                                return 
+                            } else {
+                                match res_op{
+                                    Some((inode, offset, filetype, datalist)) =>{
+                                        let name_vec = datalist.0; 
+                                        info!("readdir is success with name {:?}", &name_vec);
+                                        let isfull = reply.add(
+                                            inode, 
+                                            offset,
+                                            filetype,
+                                            OsStr::from_bytes(&name_vec),
+                                        ); 
+                                        if isfull{
+                                            reply.ok();
+                                            return
+                                        }          
+                                    }, 
+                                    None => {
+                                        reply.ok();
+                                        return
+                                    }
+                                }
                             }
                         }
+                        Err(e) => {
+                            info!("readdir error 1 {}", e); 
+                            reply.error(libc::ENETDOWN);
+                            return
+                        },
                     }
-                    Err(e) => {
-                        info!("readdir error 1 {}", e); 
-                        reply.error(libc::ENETDOWN);
-                    },
                 }
+                Err(e) => {
+                    info!("readdir error 2 {}", e); 
+                    reply.error(libc::ENETDOWN);
+                    return
+                },
             }
-            Err(e) => {
-                info!("readdir error 2 {}", e); 
-                reply.error(libc::ENETDOWN)
-            },
+
         }
+        
     }
 
     fn releasedir(
@@ -904,4 +929,69 @@ impl Filesystem for Front {
             }
         }
     }
+
+    fn mknod(
+        &mut self,
+        req: &Request,
+        parent: u64,
+        name: &OsStr,
+        mut mode: u32,
+        _umask: u32,
+        _rdev: u32,
+        reply: ReplyEntry,
+    ) {
+        info!("[mknode not implemented]");
+        return
+    }
+
+    fn rmdir(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEmpty){
+        info!("[rmdir not implemented]");
+        return
+    }
+    fn symlink(
+        &mut self,
+        req: &Request,
+        parent: u64,
+        name: &OsStr,
+        link: &Path,
+        reply: ReplyEntry,
+    ){
+        info!("[symlink not implmented]");
+        return 
+    }
+
+    fn link(
+        &mut self,
+        req: &Request,
+        inode: u64,
+        new_parent: u64,
+        new_name: &OsStr,
+        reply: ReplyEntry,
+    ) {
+        info!("[link not implmented]");
+        return
+    }
+
+    fn copy_file_range(
+        &mut self,
+        _req: &Request<'_>,
+        src_inode: u64,
+        src_fh: u64,
+        src_offset: i64,
+        dest_inode: u64,
+        dest_fh: u64,
+        dest_offset: i64,
+        size: u64,
+        _flags: u32,
+        reply: ReplyWrite,
+    ) {
+        info!("[copy_file_range not implmented]");
+        return
+    }
+
+    fn removexattr(&mut self, request: &Request<'_>, inode: u64, key: &OsStr, reply: ReplyEmpty) {
+        info!("[removexattr is not implmented]");
+        return
+    }
+
 }

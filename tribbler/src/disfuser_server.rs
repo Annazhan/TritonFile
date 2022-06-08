@@ -306,6 +306,7 @@ impl Disfuser for DisfuserServer {
         };
         info!("disfuser_write write before");
         info!("{}", request_inner.data);
+        let data: Vec<u8> = serde_json::from_str(&request_inner.data).unwrap();
         let result = self
             .filesystem
             .write(
@@ -314,7 +315,7 @@ impl Disfuser for DisfuserServer {
                 request_inner.fh,
                 request_inner.offset,
                 // &(serde_json::from_str::<[u8]>(&).unwrap()),
-                request_inner.data.as_bytes(),
+                data.as_ref(),
                 request_inner.write_flag,
                 request_inner.flags,
                 request_inner.lock_owner,
@@ -876,7 +877,7 @@ impl Disfuser for DisfuserServer {
                             ino: Some(result.0),
                             offset: Some(result.1),
                             file_type: Some(serde_json::to_string(&result.2).unwrap()),
-                            name: Some(std::str::from_utf8(&result.3 .0).unwrap().to_string()),
+                            name: Some(serde_json::to_string(&result.3 .0).unwrap().to_string()),
                             errcode,
                         })),
                         None => Ok(Response::new(ReadDirReply {

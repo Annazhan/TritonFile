@@ -1,3 +1,4 @@
+use std::fs::File;
 use std::str::FromStr;
 use std::io::{BufRead, BufReader, ErrorKind};
 use actix_files::Files;
@@ -90,7 +91,11 @@ fn main() -> TritonFileResult<()> {
     {
         options.push(MountOption::AutoUnmount);
         options.push(MountOption::AllowOther);
-        options.push(MountOption::Dev);
+        options.push(MountOption::NoDev);
+        options.push(MountOption::Sync);
+        options.push(MountOption::NoExec);
+        options.push(MountOption::RW);
+        options.push(MountOption::Suid)
         // options.push(MountOption::AllowRoot);
     }
     // let handle = Handle::current();
@@ -103,7 +108,7 @@ fn main() -> TritonFileResult<()> {
     info!("The file system is ready to be mounted");
     let result = fuser::mount2(
         front, 
-        "/Users/stella/Desktop/tmp",
+        "/Users/lynnz/Desktop/tmp",
         &options,
     );
     dbg!(&result);
