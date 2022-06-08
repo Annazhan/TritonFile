@@ -426,6 +426,34 @@ pub struct ReleaseDirReply {
     #[prost(int32, required, tag = "1")]
     pub errcode: i32,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetAllNodes {
+    #[prost(uint64, required, tag = "1")]
+    pub for_addr: u64,
+    #[prost(uint64, required, tag = "2")]
+    pub len: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetAllNodesReply {
+    #[prost(string, repeated, tag = "1")]
+    pub file_attr: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, repeated, tag = "2")]
+    pub data_s: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(int32, required, tag = "3")]
+    pub errcode: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct WriteAllNodes {
+    #[prost(string, repeated, tag = "1")]
+    pub file_attr: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, repeated, tag = "2")]
+    pub data_s: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct WriteAllNodesReply {
+    #[prost(int32, required, tag = "1")]
+    pub errcode: i32,
+}
 #[doc = r" Generated client implementations."]
 pub mod disfuser_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
@@ -762,6 +790,34 @@ pub mod disfuser_client {
             let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/releasedir");
             self.inner.unary(request.into_request(), path, codec).await
         }
+        pub async fn get_all_nodes(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetAllNodes>,
+        ) -> Result<tonic::Response<super::GetAllNodesReply>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/getAllNodes");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn write_all_nodes(
+            &mut self,
+            request: impl tonic::IntoRequest<super::WriteAllNodes>,
+        ) -> Result<tonic::Response<super::WriteAllNodesReply>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/disfuser.disfuser/writeAllNodes");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
         pub async fn get(
             &mut self,
             request: impl tonic::IntoRequest<super::Key>,
@@ -971,6 +1027,14 @@ pub mod disfuser_server {
             &self,
             request: tonic::Request<super::ReleaseDir>,
         ) -> Result<tonic::Response<super::ReleaseDirReply>, tonic::Status>;
+        async fn get_all_nodes(
+            &self,
+            request: tonic::Request<super::GetAllNodes>,
+        ) -> Result<tonic::Response<super::GetAllNodesReply>, tonic::Status>;
+        async fn write_all_nodes(
+            &self,
+            request: tonic::Request<super::WriteAllNodes>,
+        ) -> Result<tonic::Response<super::WriteAllNodesReply>, tonic::Status>;
         async fn get(
             &self,
             request: tonic::Request<super::Key>,
@@ -1598,6 +1662,68 @@ pub mod disfuser_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = releasedirSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/disfuser.disfuser/getAllNodes" => {
+                    #[allow(non_camel_case_types)]
+                    struct getAllNodesSvc<T: Disfuser>(pub Arc<T>);
+                    impl<T: Disfuser> tonic::server::UnaryService<super::GetAllNodes> for getAllNodesSvc<T> {
+                        type Response = super::GetAllNodesReply;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetAllNodes>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).get_all_nodes(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = getAllNodesSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/disfuser.disfuser/writeAllNodes" => {
+                    #[allow(non_camel_case_types)]
+                    struct writeAllNodesSvc<T: Disfuser>(pub Arc<T>);
+                    impl<T: Disfuser> tonic::server::UnaryService<super::WriteAllNodes> for writeAllNodesSvc<T> {
+                        type Response = super::WriteAllNodesReply;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::WriteAllNodes>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).write_all_nodes(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = writeAllNodesSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
                             accept_compression_encodings,
